@@ -5,7 +5,7 @@ use rosc::OscType;
 
 use crate::cursor::Cursor; 
 
-struct OscSender {
+pub struct OscSender {
     socket: UdpSocket,
     address: SocketAddr
 }
@@ -13,7 +13,7 @@ struct OscSender {
 impl OscSender {
     pub fn new(host: SocketAddr) -> Result<Self, std::io::Error> {
         let ip_address: IpAddr = if host.is_ipv4() {IpAddr::V4(Ipv4Addr::LOCALHOST)} else {IpAddr::V6(Ipv6Addr::LOCALHOST)};
-        Ok(Self {socket: UdpSocket::bind(SocketAddr::new(ip_address, 3333))?, address: host})
+        Ok(Self {socket: UdpSocket::bind(SocketAddr::new(ip_address, 0))?, address: host})
     }
 
     pub fn send_osc_packet(&self, packet: &OscPacket) -> Result<(), OscError>{
@@ -23,7 +23,7 @@ impl OscSender {
     }
 }
 
-struct Server {
+pub struct Server {
     sender_list: Vec<OscSender>,
     source_name: String,
     cursor_list: Vec<Cursor>,
@@ -119,7 +119,7 @@ impl Server {
 
         self.deliver_osc_packet(bundle);
     }
-
+    
     fn deliver_osc_packet(&self, packet: OscPacket) {
         for sender in &self.sender_list {
             sender.send_osc_packet(&packet).expect("invalid packet")

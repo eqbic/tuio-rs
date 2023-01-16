@@ -2,8 +2,8 @@ use std::time::{Instant, Duration};
 
 #[derive(Clone, Copy)]
 pub struct Point {
-    x: f32,
-    y: f32
+    pub x: f32,
+    pub y: f32
 }
 
 impl Point {
@@ -47,7 +47,7 @@ pub enum State {
 pub struct Cursor {
     id: u32,
     instant: Instant,
-    source: Source,
+    // source: Source,
     path: Vec<Point>,
     velocity: Velocity,
     acceleration: f32,
@@ -56,11 +56,10 @@ pub struct Cursor {
 }
 
 impl Cursor {
-    pub fn new(instant: Instant, id: u32, source: Source, position: Point) -> Self {
+    pub fn new(instant: Instant, id: u32/*, source: Source*/, position: Point) -> Self {
         Self {
             id,
             instant,
-            source,
             path: Vec::from([position]),
             velocity: Velocity::default(),
             acceleration: 0f32,

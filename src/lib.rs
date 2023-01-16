@@ -1,5 +1,6 @@
-mod cursor;
-mod server;
+pub mod cursor;
+pub mod server;
+pub mod client;
 
 
 pub fn add(left: usize, right: usize) -> usize {
