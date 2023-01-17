@@ -1,6 +1,6 @@
 use std::time::{Instant, Duration};
 
-#[derive(Clone, Copy)]
+// #[derive(Clone, Copy)]
 pub struct Point {
     pub x: f32,
     pub y: f32
@@ -16,8 +16,8 @@ impl Point {
 
 #[derive(Default, Clone, Copy)]
 pub struct Velocity {
-    x: f32,
-    y: f32
+    pub x: f32,
+    pub y: f32
 }
 
 impl Velocity {
@@ -27,7 +27,7 @@ impl Velocity {
 }
 
 pub struct Source {
-    pub id: u32,
+    pub id: i32,
     pub name: String,
     pub address: String
 }
@@ -45,7 +45,7 @@ pub enum State {
 
 // #[derive(Clone, Copy)]
 pub struct Cursor {
-    id: u32,
+    id: i32,
     instant: Instant,
     // source: Source,
     path: Vec<Point>,
@@ -56,7 +56,7 @@ pub struct Cursor {
 }
 
 impl Cursor {
-    pub fn new(instant: Instant, id: u32/*, source: Source*/, position: Point) -> Self {
+    pub fn new(instant: Instant, id: i32/*, source: Source*/, position: Point) -> Self {
         Self {
             id,
             instant,
@@ -68,7 +68,7 @@ impl Cursor {
         }
     }
 
-    pub fn get_id(&self) -> u32 {
+    pub fn get_id(&self) -> i32 {
         self.id
     }
 
