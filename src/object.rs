@@ -1,36 +1,38 @@
-use std::time::{Instant, Duration};
+use std::time::{Duration};
 
 use crate::cursor::{Point, Velocity, State};
 
 pub struct Object {
     session_id: i32,
     class_id: i32,
-    instant: Instant,
+    duration: Duration,
     path: Vec<Point>,
     velocity: Velocity,
     acceleration: f32,
     angle: f32,
     angular_speed: f32,
     angular_acceleration: f32,
-    duration: Duration,
     state: State
 }
 
 impl Object {
-    pub fn new(instant: Instant, session_id: i32, class_id: i32, point: Point, angle: f32) -> Self {
+    pub fn new(time: Duration, session_id: i32, class_id: i32, point: Point, angle: f32) -> Self {
         Self { 
             session_id,
             class_id,
-            instant,
+            duration: time,
             path: Vec::from([point]),
             velocity: Velocity::default(),
             acceleration: 0f32,
             angle,
             angular_speed: 0f32,
             angular_acceleration: 0f32,
-            duration: instant.elapsed(),
             state: State::Added
         }
+    }
+
+    pub fn get_time(&self) -> Duration {
+        self.duration
     }
 
     pub fn get_class_id(&self) -> i32 {
@@ -69,7 +71,11 @@ impl Object {
         self.angular_acceleration
     }
 
-    pub fn update(&mut self, position: Point, angle: f32) {
+    pub fn get_state(&self) -> State {
+        self.state
+    }
+
+    pub fn update(&mut self, time: Duration, position: Point, angle: f32) {
         todo!()
     }
 }

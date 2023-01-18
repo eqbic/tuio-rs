@@ -1,10 +1,10 @@
-use std::time::{Instant, Duration};
+use std::time::{Duration};
 
 use crate::cursor::{Point, Velocity, State};
 
 pub struct Blob {
     session_id: i32,
-    instant: Instant,
+    duration: Duration,
     path: Vec<Point>,
     velocity: Velocity,
     acceleration: f32,
@@ -14,16 +14,15 @@ pub struct Blob {
     width: f32,
     height: f32,
     area: f32,
-    duration: Duration,
     state: State
 }
 
 impl Blob {
     #[allow(clippy::too_many_arguments)]
-    pub fn new(instant: Instant, session_id: i32, point: Point, angle: f32, width: f32, height: f32, area: f32) -> Self {
+    pub fn new(time: Duration, session_id: i32, point: Point, angle: f32, width: f32, height: f32, area: f32) -> Self {
         Self { 
             session_id,
-            instant,
+            duration: time,
             path: Vec::from([point]),
             velocity: Velocity::default(),
             acceleration: 0f32,
@@ -33,12 +32,15 @@ impl Blob {
             width,
             height,
             area,
-            duration: instant.elapsed(),
             state: State::Added
         }
     }
 
-    pub fn update(&mut self, point: Point, angle: f32, width: f32, height: f32, area: f32) {
+    pub fn get_time(&self) -> Duration {
+        self.duration
+    }
+
+    pub fn update(&mut self, time: Duration, point: Point, angle: f32, width: f32, height: f32, area: f32) {
         todo!()
     }
 
@@ -92,6 +94,10 @@ impl Blob {
 
     pub fn get_area(&self) -> f32 {
         self.area
+    }
+        
+    pub fn get_state(&self) -> State {
+        self.state
     }
 }
 

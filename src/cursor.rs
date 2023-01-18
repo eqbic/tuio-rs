@@ -1,4 +1,4 @@
-use std::time::{Instant, Duration};
+use std::time::{Duration};
 
 // #[derive(Clone, Copy)]
 pub struct Point {
@@ -46,30 +46,32 @@ pub enum State {
 // #[derive(Clone, Copy)]
 pub struct Cursor {
     id: i32,
-    instant: Instant,
+    duration: Duration,
     // source: Source,
     path: Vec<Point>,
     velocity: Velocity,
     acceleration: f32,
-    duration: Duration,
     state: State
 }
 
 impl Cursor {
-    pub fn new(instant: Instant, id: i32/*, source: Source*/, position: Point) -> Self {
+    pub fn new(time: Duration, id: i32/*, source: Source*/, position: Point) -> Self {
         Self {
             id,
-            instant,
             path: Vec::from([position]),
             velocity: Velocity::default(),
             acceleration: 0f32,
-            duration: instant.elapsed(),
+            duration: time,
             state: State::Added
         }
     }
 
     pub fn get_id(&self) -> i32 {
         self.id
+    }
+
+    pub fn get_time(&self) -> Duration {
+        self.duration
     }
 
     pub fn get_x_position(&self) -> f32 {
@@ -92,8 +94,12 @@ impl Cursor {
         self.acceleration
     }
 
-    pub fn update(&mut self, position: Point) {
-        let delta_time = (self.instant.elapsed() - self.duration).as_secs_f32();
+    pub fn get_state(&self) -> State {
+        self.state
+    }
+
+    pub fn update(&mut self, time: Duration, position: Point) {
+        let delta_time = (time - self.duration).as_secs_f32();
         let last_position = self.path.last().unwrap();
 
         let distance = position.distance_from(last_position);
@@ -106,6 +112,7 @@ impl Cursor {
         self.velocity = Velocity{x: delta_x / delta_time, y: delta_y / delta_time};
         self.acceleration = (speed - last_speed) / delta_time;
         self.path.push(position);
+        self.duration = time;
         
         self.state = if self.acceleration > 0f32 { State::Accelerating } else if self.acceleration < 0f32 { State::Decelerating } else { State::Stopped };
     }

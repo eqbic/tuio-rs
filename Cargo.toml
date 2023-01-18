@@ -7,4 +7,6 @@ edition = "2021"
 
 [dependencies]
 dyn_partial_eq = "0.1.2"
+indexmap = "1.9.2"
+local-ip-address = "0.5.1"
 rosc = "0.9.1"
