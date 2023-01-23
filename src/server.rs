@@ -1,4 +1,4 @@
-use std::{net::{SocketAddr, UdpSocket, Ipv4Addr, Ipv6Addr, IpAddr}, sync::atomic::{AtomicI32, Ordering}, time::{SystemTime, Instant, Duration}, collections::HashMap};
+use std::{net::{SocketAddr, UdpSocket, Ipv4Addr, Ipv6Addr, IpAddr}, sync::atomic::{AtomicI32, Ordering}, time::{SystemTime, Instant, Duration}};
 use rosc::{OscPacket, OscMessage, OscBundle, OscTime, OscError};
 use rosc::encoder;
 use rosc::OscType;
@@ -7,9 +7,19 @@ use indexmap::{IndexMap};
 
 use crate::{cursor::{Cursor, Point}, dispatcher::Dispatch, listener::Listener, object::Object, blob::Blob}; 
 
+/// Base trait to implement sending OSC over various transport methods
 pub trait OscSender {
+    /// Sends an [OscPacket].
+    /// Returns an [OscError] if packet's encoding fails
+    ///
+    /// # Arguments
+    /// * `packet` - a reference to an [OscPacket]
     fn send_osc_packet(&self, packet: &OscPacket) -> Result<(), OscError>;
+
+    /// Returns a true if the connection is established
     fn is_connected(&self) -> bool;
+
+    /// Returns true if the target is a loopback address
     fn is_local(&self) -> bool;
 }
 
@@ -19,9 +29,13 @@ pub struct UdpSender {
 }
 
 impl UdpSender {
-    pub fn new(host: SocketAddr) -> Result<Self, std::io::Error> {
-        let ip_address: IpAddr = if host.is_ipv4() {IpAddr::V4(Ipv4Addr::LOCALHOST)} else {IpAddr::V6(Ipv6Addr::LOCALHOST)};
-        Ok(Self {socket: UdpSocket::bind(SocketAddr::new(ip_address, 0))?, address: host})
+    /// Creates an [UdpSender] binded on localhost
+    ///
+    /// # Arguments
+    /// * `target` - the target socket address
+    pub fn new(target: SocketAddr) -> Result<Self, std::io::Error> {
+        let ip_address: IpAddr = if target.is_ipv4() {IpAddr::V4(Ipv4Addr::LOCALHOST)} else {IpAddr::V6(Ipv6Addr::LOCALHOST)};
+        Ok(Self {socket: UdpSocket::bind(SocketAddr::new(ip_address, 0))?, address: target})
     }
 }
 
