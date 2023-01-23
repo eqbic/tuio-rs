@@ -5,6 +5,7 @@ mod listener;
 mod dispatcher;
 mod object;
 mod blob;
+mod errors;
 
 
 pub fn add(left: usize, right: usize) -> usize {
