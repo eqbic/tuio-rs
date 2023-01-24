@@ -18,6 +18,59 @@ pub trait Dispatch {
  
         /// Removes all Listener from the list of registered TUIO event listeners
         fn remove_all_listeners(&mut self);
+
+        fn get_listeners(&mut self) -> &mut Vec<Box<dyn Listener>>;
+
+        /// Adds an [Object] to the listener
+        fn add_object(&mut self, object: &Object) {
+            for listener in self.get_listeners() {
+                listener.add_object(object);
+            }
+        }
+
+        /// Removes [Object]s
+		///
+		/// # Arguments
+		/// * `ids` - a slice of the IDs to remove
+        fn remove_objects(&mut self, ids: &[i32]) {
+            for listener in self.get_listeners() {
+                listener.remove_objects(ids);
+            }
+        }
+        
+        /// Adds a [Cursor] to the listener
+        fn add_cursor(&mut self, cursor: &Cursor) {
+            for listener in self.get_listeners() {
+                listener.add_cursor(cursor);
+            }
+        }
+
+        /// Removes [Cursor]s
+		///
+		/// # Arguments
+		/// * `ids` - a slice of the IDs to remove
+        fn remove_cursors(&mut self, ids: &[i32]) {
+            for listener in self.get_listeners() {
+                listener.remove_cursors(ids);
+            }
+        }
+        
+        /// Adds a [Blob] to the listener
+        fn add_blob(&mut self, blob: &Blob) {
+            for listener in self.get_listeners() {
+                listener.add_blob(blob);
+            }
+        }
+
+        /// Removes [Blob]s
+		///
+		/// # Arguments
+		/// * `ids` - a slice of the IDs to remove
+        fn remove_blobs(&mut self, ids: &[i32]) {
+            for listener in self.get_listeners() {
+                listener.remove_blobs(ids);
+            }
+        }
          
         /// Returns a slice of all currently active Objects
         fn get_objects(&self) -> Vec<&Object>;

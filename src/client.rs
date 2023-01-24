@@ -3,7 +3,7 @@ use std::{time::{Instant, Duration}, net::{SocketAddr, IpAddr, Ipv4Addr, UdpSock
 use indexmap::IndexMap;
 use rosc::{OscPacket, OscMessage, OscType};
 
-use crate::{cursor::{Cursor, Point, Velocity}, object::Object, blob::Blob, errors::TuioError};
+use crate::{cursor::{Cursor, Point, Velocity}, object::Object, blob::Blob, errors::TuioError, listener::{self, Listener}, dispatcher::Dispatch};
 
 /// Base trait to implement receiving OSC over various transport methods
 pub trait OscReceiver {
@@ -95,8 +95,9 @@ pub struct Client<O: OscReceiver> {
     alive_cursor_id_list: Vec<u32>,
     current_frame: AtomicI32,
     instant: Instant,
-    current_duration: Duration,
+    current_time: Duration,
     object_map: IndexMap<i32, Object>,
+    frame_objects: Vec<(i32, i32, f32, f32, f32, f32, f32, f32, f32, f32)>,
     cursor_map: IndexMap<i32, Cursor>,
     blob_map: IndexMap<i32, Blob>,
     source_list: IndexMap<String, u32>,
@@ -104,12 +105,20 @@ pub struct Client<O: OscReceiver> {
     source_name: String,
     source_address: SocketAddr,
     osc_receiver: O,
+    listener_list: Vec<Box<dyn Listener>>,
     local_receiver: bool
 }
 
-fn unwrap_object_args(args: Vec<OscType>) -> Option<(i32, i32, f32, f32, f32, f32, f32, f32, f32, f32)> {
-    let mut iter = args.into_iter();
-    Some((iter.next()?.int()?, iter.next()?.int()?, iter.next()?.float()?, iter.next()?.float()?, iter.next()?.float()?, iter.next()?.float()?, iter.next()?.float()?, iter.next()?.float()?, iter.next()?.float()?, iter.next()?.float()?))
+fn unwrap_object_args(args: &[OscType]) -> Option<(i32, i32, f32, f32, f32, f32, f32, f32, f32, f32)> {
+    Some((args[1].clone().int()?, args[2].clone().int()?, args[3].clone().float()?, args[4].clone().float()?, args[5].clone().float()?, args[6].clone().float()?, args[7].clone().float()?, args[8].clone().float()?, args[9].clone().float()?, args[10].clone().float()?))
+}
+
+fn unwrap_cursor_args(args: &[OscType]) -> Option<(i32, i32, f32, f32, f32, f32, f32, f32, f32, f32)> {
+    Some((args[0].clone().int()?, args[0].clone().int()?, args[0].clone().float()?, args[0].clone().float()?, args[0].clone().float()?, args[0].clone().float()?, args[0].clone().float()?, args[0].clone().float()?, args[0].clone().float()?, args[0].clone().float()?))
+}
+
+fn unwrap_blob_args(args: &[OscType]) -> Option<(i32, i32, f32, f32, f32, f32, f32, f32, f32, f32)> {
+    Some((args[0].clone().int()?, args[0].clone().int()?, args[0].clone().float()?, args[0].clone().float()?, args[0].clone().float()?, args[0].clone().float()?, args[0].clone().float()?, args[0].clone().float()?, args[0].clone().float()?, args[0].clone().float()?))
 }
 
 impl<O: OscReceiver> Client<O>{
@@ -124,14 +133,16 @@ impl<O: OscReceiver> Client<O>{
             frame_cursor: Vec::new(),
             alive_cursor_id_list: Vec::new(),
             current_frame: (-1).into(),
-            current_duration: Duration::default(),
+            current_time: Duration::default(),
             source_list: IndexMap::new(),
             source_id: 0,
-            source_name: "todo!()".to_string(),
+            source_name: String::default(),
             local_receiver: true,
             object_map: IndexMap::new(),
+            frame_objects: Vec::new(),
             cursor_map: IndexMap::new(),
             blob_map: IndexMap::new(),
+            listener_list: Vec::new(),
         })
     }
 
@@ -170,14 +181,27 @@ impl<O: OscReceiver> Client<O>{
                             },
                             "alive" => {
                                 let to_keep: HashSet<i32> = HashSet::from_iter(message.args.into_iter().skip(1).filter_map(|e| e.int()));
-                                self.object_map.retain(|key, _| to_keep.contains(key));
+
+                                let mut removed_ids = Vec::with_capacity(self.object_map.len());
+
+                                self.object_map.retain(|key, _| {
+                                    let keep = to_keep.contains(key);
+                                    if !keep {
+                                        removed_ids.push(*key);
+                                    }
+                                    keep
+                                });
+
+                                self.remove_objects(&removed_ids);
                             },
                             "set" => {
                                 if message.args.len() == 11 {
-                                    if let Some((session_id, class_id, x_pos, y_pos, angle, x_vel, y_vel, angular_speed, acceleration, angular_acceleration)) = unwrap_object_args(message.args) {
-                                        self.object_map.entry(session_id)
-                                        .and_modify(|entry| entry.update_values(class_id, Point { x: x_pos, y: y_pos }, angle, Velocity{x: x_vel, y: y_vel}, angular_speed, acceleration, angular_acceleration))
-                                        .or_insert(Object::new(Duration::default(), session_id, class_id, Point { x: x_pos, y: y_pos }, angle).with_movement(Velocity{x: x_vel, y: y_vel}, angular_speed, acceleration, angular_acceleration));
+                                    if let Some(args) = unwrap_object_args(&message.args)
+                                    {
+                                        self.frame_objects.push(args);
+                                    }
+                                    else {
+                                        eprintln!("{}", TuioError::MissingArgumentsError(message));
                                     }
                                 }
                                 else {
@@ -191,7 +215,7 @@ impl<O: OscReceiver> Client<O>{
                                     if fseq > &0 {
                                         let current_frame = self.current_frame.load(Ordering::SeqCst);
                                         if fseq > &current_frame {
-                                            self.current_duration = self.instant.elapsed();
+                                            self.current_time = self.instant.elapsed();
                                         }
                                         
                                         if fseq >= &current_frame || current_frame - fseq > 100 {
@@ -202,8 +226,13 @@ impl<O: OscReceiver> Client<O>{
                                         }
                                     }
 
-                                    if(!late_frame) {
-                                        // To do
+                                    if !late_frame {
+                                        for (session_id, class_id, x_pos, y_pos, angle, x_vel, y_vel, angular_speed, acceleration, angular_acceleration) in self.frame_objects.drain(..) {
+                                            // To do: notify add and update
+                                            self.object_map.entry(session_id)
+                                            .and_modify(|entry| entry.update_values(class_id, Point { x: x_pos, y: y_pos }, angle, Velocity{x: x_vel, y: y_vel}, angular_speed, acceleration, angular_acceleration))
+                                            .or_insert(Object::new(self.current_time, session_id, class_id, Point { x: x_pos, y: y_pos }, angle).with_movement(Velocity{x: x_vel, y: y_vel}, angular_speed, acceleration, angular_acceleration));
+                                        }
                                     }
                                 }
                                 else {
@@ -239,5 +268,60 @@ impl<O: OscReceiver> Client<O>{
                 }
             }
         }
+    }
+}
+
+impl<O: OscReceiver> Dispatch for Client<O> {
+    fn add_listener<L: Listener + 'static>(&mut self, listener: L) {
+        self.listener_list.push(Box::new(listener))
+    }
+
+    fn remove_listener<L: Listener + 'static>(&mut self, listener: L) {
+        let listener: Box<dyn Listener> = Box::new(listener);
+        self.listener_list.retain(|x| x == &listener)
+    }
+
+    fn remove_all_listeners(&mut self) {
+        self.listener_list.clear();
+    }
+
+    fn get_objects(&self) -> Vec<&Object> {
+        self.object_map.values().collect()
+    }
+
+    fn get_object_count(&self) -> usize {
+        self.object_map.len()
+    }
+
+    fn get_cursors(&self) -> Vec<&Cursor> {
+        self.cursor_map.values().collect()
+    }
+
+    fn get_cursor_count(&self) -> usize {
+        self.cursor_map.len()
+    }
+
+    fn get_blobs(&self) -> Vec<&Blob> {
+        self.blob_map.values().collect()
+    }
+
+    fn get_blob_count(&self) -> usize {
+        self.blob_map.len()
+    }
+
+    fn get_object(&self, session_id: i32) -> Option<&Object> {
+        self.object_map.get(&session_id)
+    }
+
+    fn get_cursor(&self, session_id: i32) -> Option<&Cursor> {
+        self.cursor_map.get(&session_id)
+    }
+
+    fn get_blob(&self, session_id: i32) -> Option<&Blob> {
+        self.blob_map.get(&session_id)
+    }
+
+    fn get_listeners(&mut self) -> &mut Vec<Box<dyn Listener>> {
+        &mut self.listener_list
     }
 }

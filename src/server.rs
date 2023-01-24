@@ -669,4 +669,8 @@ impl Dispatch for Server {
     fn get_blob(&self, session_id: i32) -> Option<&Blob> {
         self.blob_map.get(&session_id)
     }
+
+    fn get_listeners(&mut self) -> &mut Vec<Box<dyn Listener>> {
+        &mut self.listener_list
+    }
 }
