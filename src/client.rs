@@ -1,9 +1,9 @@
-use std::{time::Instant, net::{SocketAddr, IpAddr, Ipv4Addr, UdpSocket}, thread, sync::{atomic::{AtomicBool, Ordering, AtomicI32}, Arc}, collections::HashSet};
+use std::{time::{Instant, Duration}, net::{SocketAddr, IpAddr, Ipv4Addr, UdpSocket}, thread, sync::{atomic::{AtomicBool, Ordering, AtomicI32}, Arc}, collections::HashSet, panic::UnwindSafe};
 
 use indexmap::IndexMap;
 use rosc::{OscPacket, OscMessage, OscType};
 
-use crate::{cursor::Cursor, object::Object, blob::Blob, errors::TuioError};
+use crate::{cursor::{Cursor, Point, Velocity}, object::Object, blob::Blob, errors::TuioError};
 
 /// Base trait to implement receiving OSC over various transport methods
 pub trait OscReceiver {
@@ -95,6 +95,7 @@ pub struct Client<O: OscReceiver> {
     alive_cursor_id_list: Vec<u32>,
     current_frame: AtomicI32,
     instant: Instant,
+    current_duration: Duration,
     object_map: IndexMap<i32, Object>,
     cursor_map: IndexMap<i32, Cursor>,
     blob_map: IndexMap<i32, Blob>,
@@ -104,6 +105,11 @@ pub struct Client<O: OscReceiver> {
     source_address: SocketAddr,
     osc_receiver: O,
     local_receiver: bool
+}
+
+fn unwrap_object_args(args: Vec<OscType>) -> Option<(i32, i32, f32, f32, f32, f32, f32, f32, f32, f32)> {
+    let mut iter = args.into_iter();
+    Some((iter.next()?.int()?, iter.next()?.int()?, iter.next()?.float()?, iter.next()?.float()?, iter.next()?.float()?, iter.next()?.float()?, iter.next()?.float()?, iter.next()?.float()?, iter.next()?.float()?, iter.next()?.float()?))
 }
 
 impl<O: OscReceiver> Client<O>{
@@ -118,6 +124,7 @@ impl<O: OscReceiver> Client<O>{
             frame_cursor: Vec::new(),
             alive_cursor_id_list: Vec::new(),
             current_frame: (-1).into(),
+            current_duration: Duration::default(),
             source_list: IndexMap::new(),
             source_id: 0,
             source_name: "todo!()".to_string(),
@@ -165,8 +172,44 @@ impl<O: OscReceiver> Client<O>{
                                 let to_keep: HashSet<i32> = HashSet::from_iter(message.args.into_iter().skip(1).filter_map(|e| e.int()));
                                 self.object_map.retain(|key, _| to_keep.contains(key));
                             },
-                            "set" => {},
-                            "fseq" => {},
+                            "set" => {
+                                if message.args.len() == 11 {
+                                    if let Some((session_id, class_id, x_pos, y_pos, angle, x_vel, y_vel, angular_speed, acceleration, angular_acceleration)) = unwrap_object_args(message.args) {
+                                        self.object_map.entry(session_id)
+                                        .and_modify(|entry| entry.update_values(class_id, Point { x: x_pos, y: y_pos }, angle, Velocity{x: x_vel, y: y_vel}, angular_speed, acceleration, angular_acceleration))
+                                        .or_insert(Object::new(Duration::default(), session_id, class_id, Point { x: x_pos, y: y_pos }, angle).with_movement(Velocity{x: x_vel, y: y_vel}, angular_speed, acceleration, angular_acceleration));
+                                    }
+                                }
+                                else {
+                                    eprintln!("{}", TuioError::MissingArgumentsError(message));
+                                }
+                            },
+                            "fseq" => {
+                                if let Some(OscType::Int(fseq)) = message.args.get(1) {
+                                    let mut late_frame = false;
+
+                                    if fseq > &0 {
+                                        let current_frame = self.current_frame.load(Ordering::SeqCst);
+                                        if fseq > &current_frame {
+                                            self.current_duration = self.instant.elapsed();
+                                        }
+                                        
+                                        if fseq >= &current_frame || current_frame - fseq > 100 {
+                                            self.current_frame.store(*fseq, Ordering::SeqCst);
+                                        }
+                                        else {
+                                            late_frame = true;
+                                        }
+                                    }
+
+                                    if(!late_frame) {
+                                        // To do
+                                    }
+                                }
+                                else {
+                                    eprintln!("{}", TuioError::MissingArgumentsError(message));
+                                }
+                            },
                             _ => ()
                         }
                     }

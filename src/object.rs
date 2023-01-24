@@ -7,10 +7,10 @@ pub struct Object {
     class_id: i32,
     duration: Duration,
     path: Vec<Point>,
-    velocity: Velocity,
-    acceleration: f32,
     angle: f32,
+    velocity: Velocity,
     angular_speed: f32,
+    acceleration: f32,
     angular_acceleration: f32,
     state: State
 }
@@ -29,6 +29,14 @@ impl Object {
             angular_acceleration: 0f32,
             state: State::Added
         }
+    }
+
+    pub fn with_movement(mut self, velocity: Velocity, angular_speed: f32, acceleration: f32, angular_acceleration: f32) -> Self {
+        self.velocity = velocity;
+        self.angular_speed = angular_speed;
+        self.acceleration = acceleration;
+        self.angular_acceleration = angular_acceleration;
+        self
     }
 
     pub fn get_time(&self) -> Duration {
@@ -77,6 +85,16 @@ impl Object {
 
     pub fn update(&mut self, time: Duration, position: Point, angle: f32) {
         todo!()
+    }
+
+    pub fn update_values(&mut self, class_id: i32, position: Point, angle: f32, velocity: Velocity, angular_speed: f32, acceleration: f32, angular_acceleration: f32) {
+        self.class_id = class_id;
+        self.path.push(position);
+        self.angle = angle;
+        self.velocity = velocity;
+        self.angular_speed = angular_speed;
+        self.acceleration = acceleration;
+        self.angular_acceleration = angular_acceleration;
     }
 }
 

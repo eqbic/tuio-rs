@@ -6,7 +6,7 @@ use rosc::OscMessage;
 pub enum TuioError {
     EmptyMessageError(OscMessage),
     MissingSourceError(OscMessage),
-    MissingIdError(OscMessage),
+    MissingArgumentsError(OscMessage),
 }
 
 impl fmt::Display for TuioError {
@@ -14,7 +14,7 @@ impl fmt::Display for TuioError {
         match self {
             TuioError::EmptyMessageError(msg) => write!(f, "empty message arguments at: {:?}", msg),
             TuioError::MissingSourceError(msg) => write!(f, "missing source name at: {:?}", msg),
-            TuioError::MissingIdError(msg) => write!(f, "missing session ID(s) at: {:?}", msg),
+            TuioError::MissingArgumentsError(msg) => write!(f, "missing arguments at: {:?}", msg),
         }
     }
 }
