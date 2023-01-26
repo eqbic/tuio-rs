@@ -12,7 +12,7 @@ pub trait Dispatch {
 
         /// Removes the provided Listener from the list of registered TUIO event listeners
 		///
-		/// # Arguments
+		/// # Argument
 		/// * `listener` - the Listener to remove
         fn remove_listener<L: Listener + 'static>(&mut self, listener: L);
  
@@ -24,13 +24,13 @@ pub trait Dispatch {
 
         /// Notifies a [Object] update
         ///
-        /// # Arguments
+        /// # Argument
         /// * `object` - the updated [Object]
         fn update_object(&mut self, object: &Object);
 
         /// Removes [Object]s
 		///
-		/// # Arguments
+		/// # Argument
 		/// * `ids` - a slice of the IDs to remove
         fn remove_objects(&mut self, ids: &[i32]);
         
@@ -39,13 +39,13 @@ pub trait Dispatch {
         
         /// Notifies a [Cursor] update
         ///
-        /// # Arguments
+        /// # Argument
         /// * `cursor` - the updated [Cursor]
         fn update_cursor(&mut self, cursor: &Cursor);
 
         /// Removes [Cursor]s
 		///
-		/// # Arguments
+		/// # Argument
 		/// * `ids` - a slice of the IDs to remove
         fn remove_cursors(&mut self, ids: &[i32]);
         
@@ -54,53 +54,15 @@ pub trait Dispatch {
 
         /// Notifies a [Blob] update
         ///
-        /// # Arguments
+        /// # Argument
         /// * `blob` - the updated [Blob]
         fn update_blob(&mut self, blob: &Blob);
 
         /// Removes [Blob]s
 		///
-		/// # Arguments
+		/// # Argument
 		/// * `ids` - a slice of the IDs to remove
         fn remove_blobs(&mut self, ids: &[i32]);
-
-        /* 
-        /// Returns a slice of all currently active Objects
-        fn get_objects(&self) -> Vec<&Object>;
- 
-        /// Returns the number of all currently active Objects
-        fn get_object_count(&self) -> usize;
-         
-        /// Returns a slice of all currently active Cursors
-        fn get_cursors(&self) -> Vec<&Cursor>;
- 
-        /// Returns the number of all currently active Cursors
-        fn get_cursor_count(&self) -> usize;
-        
-        /// Returns a slice of all currently active Blobs
-        fn get_blobs(&self) -> Vec<&Blob>;
- 
-        /// Returns the number of all currently active Blobs
-        fn get_blob_count(&self) -> usize;
-         
-        ///  Returns an Option of the Object corresponding to the provided Session ID
-        ///
-		/// # Arguments
-		/// * `session_id` - the id of the object
-        fn get_object(&self, session_id: i32) -> Option<&Object>;
- 
-        ///  Returns an Option of the Cursor corresponding to the provided Session ID
-        ///
-		/// # Arguments
-		/// * `session_id` - the id of the cursor
-        fn get_cursor(&self, session_id: i32) -> Option<&Cursor>;
-
-        ///  Returns an Option of the Blob corresponding to the provided Session ID
-        ///
-		/// # Arguments
-		/// * `session_id` - the id of the blob
-        fn get_blob(&self, session_id: i32) -> Option<&Blob>;
-        */
 }
 
 pub struct Dispatcher {
