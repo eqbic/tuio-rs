@@ -1,7 +1,7 @@
 use std::{time::{Instant, Duration}, net::{SocketAddr, IpAddr, Ipv4Addr, UdpSocket}, thread, sync::{atomic::{AtomicBool, Ordering, AtomicI32}, Arc}, collections::HashSet, fmt::Error, borrow::Borrow};
 
 use indexmap::IndexMap;
-use rosc::{OscPacket, OscMessage, OscType};
+use rosc::{OscPacket, OscMessage, OscType, OscBundle};
 
 use crate::{cursor::{Cursor, Point, Velocity}, object::Object, blob::Blob, errors::TuioError, listener::{self, Listener}, dispatcher::{Dispatch, Dispatcher}};
 
@@ -298,20 +298,22 @@ impl<O: OscReceiver> Client<O>{
         }
     }
 
-    fn process_osc_packet(&mut self, packet: OscPacket) {
+    fn process_osc_packet(&mut self, packet: OscPacket) -> Result<(), TuioError> {
         match packet {
             OscPacket::Message(msg) => {
                 println!("OSC address: {}", msg.addr);
                 println!("OSC arguments: {:?}", msg.args);
                 
-                self.process_osc_message(msg);
+                self.process_osc_message(msg)
             }
             OscPacket::Bundle(bundle) => {
                 println!("OSC Bundle: {:?}", bundle);
 
                 for message in bundle.content {
-                    self.process_osc_packet(message);
+                    self.process_osc_packet(message)?
                 }
+
+                Ok(())
             }
         }
     }
