@@ -232,7 +232,6 @@ impl<O: OscReceiver> Client<O>{
     /// Returns true if the frame is a new frame
     /// # Argument
     /// * `frame` - the new frame number
-
     fn update_frame(&mut self, frame: i32) -> bool {
         if frame > 0 {
             let current_frame = self.current_frame.load(Ordering::SeqCst);
@@ -379,7 +378,68 @@ impl<O: OscReceiver> Client<O>{
                     None => Err(TuioError::EmptyMessageError(message)),
                     _ => Err(TuioError::UnknownMessageTypeError(message))
                 }
-            }
+            },
+            "/tuio/2Dblb" => {
+                match message.args.first() {
+                    Some(OscType::String(arg)) => {
+                        match arg.as_str() {
+                            "source" => {
+                                self.set_source_name(try_unwrap_source_name(message)?);
+                                Ok(())
+                            },
+                            "alive" => {
+                                let to_keep: HashSet<i32> = HashSet::from_iter(message.args.into_iter().skip(1).filter_map(|e| e.int()));
+                                let blob_map = &mut self.source_list.get_mut(&self.source_name).unwrap().blob_map;
+                                self.dispatcher.remove_objects(&retain_by_ids(blob_map, to_keep));
+                                Ok(())
+                            },
+                            "set" => {
+                                if message.args.len() == 11 {
+                                    match try_unwrap_blob_args(&message.args) {
+                                        Ok(params) => {
+                                            self.frame_blobs.push(params);
+                                            Ok(())
+                                        },
+                                        Err(index) => Err(TuioError::WrongArgumentTypeError(message, index)),
+                                    }
+                                }
+                                else {
+                                    Err(TuioError::MissingArgumentsError(message))
+                                }
+                            },
+                            "fseq" => {
+                                if let Some(OscType::Int(fseq)) = message.args.get(1) {
+                                    if self.update_frame(*fseq) {
+                                        let blob_map = &mut self.source_list.get_mut(&self.source_name).unwrap().blob_map;
+
+                                        for (session_id, x_pos, y_pos, angle, width, height, area, x_vel, y_vel, angular_speed, acceleration, angular_acceleration) in self.frame_blobs.drain(..) {
+                                            match blob_map.entry(session_id) {
+                                                indexmap::map::Entry::Occupied(mut entry) => {
+                                                    let blob = entry.get_mut();
+                                                    blob.update_values(Point { x: x_pos, y: y_pos }, angle, width, height, area, Velocity{x: x_vel, y: y_vel}, angular_speed, acceleration, angular_acceleration);
+                                                    self.dispatcher.update_blob(blob);
+                                                },
+                                                indexmap::map::Entry::Vacant(entry) => {
+                                                    let blob = Blob::new(self.current_time, session_id, Point { x: x_pos, y: y_pos }, angle, width, height, area).with_movement(Velocity{x: x_vel, y: y_vel}, angular_speed, acceleration, angular_acceleration);
+                                                    self.dispatcher.add_blob(&blob);
+                                                    entry.insert(blob);
+                                                },
+                                            }
+                                        }
+                                    }
+                                    Ok(())
+                                }
+                                else {
+                                    Err(TuioError::MissingArgumentsError(message))
+                                }
+                            },
+                            _ => Err(TuioError::UnknownMessageTypeError(message))
+                        }
+                    }
+                    None => Err(TuioError::EmptyMessageError(message)),
+                    _ => Err(TuioError::UnknownMessageTypeError(message))
+                }
+            },
             _ => Err(TuioError::EmptyMessageError(message))
         }
     }

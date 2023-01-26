@@ -36,12 +36,32 @@ impl Blob {
         }
     }
 
+    pub fn with_movement(mut self, velocity: Velocity, angular_speed: f32, acceleration: f32, angular_acceleration: f32) -> Self {
+        self.velocity = velocity;
+        self.angular_speed = angular_speed;
+        self.acceleration = acceleration;
+        self.angular_acceleration = angular_acceleration;
+        self
+    }
+
     pub fn get_time(&self) -> Duration {
         self.duration
     }
 
     pub fn update(&mut self, time: Duration, point: Point, angle: f32, width: f32, height: f32, area: f32) {
         todo!()
+    }
+
+    pub fn update_values(&mut self, position: Point, angle: f32, width: f32, height: f32, area: f32, velocity: Velocity, angular_speed: f32, acceleration: f32, angular_acceleration: f32) {
+        self.path.push(position);
+        self.angle = angle;
+        self.width = width;
+        self.height = height;
+        self.area = area;
+        self.velocity = velocity;
+        self.angular_speed = angular_speed;
+        self.acceleration = acceleration;
+        self.angular_acceleration = angular_acceleration;
     }
 
     pub fn get_x_position(&self) -> f32 {
