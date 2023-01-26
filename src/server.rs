@@ -5,7 +5,7 @@ use rosc::OscType;
 use local_ip_address::local_ip;
 use indexmap::{IndexMap};
 
-use crate::{cursor::{Cursor, Point}, dispatcher::Dispatch, listener::Listener, object::Object, blob::Blob}; 
+use crate::{cursor::{Cursor, Point}, dispatcher::{Dispatch, Dispatcher}, listener::Listener, object::Object, blob::Blob}; 
 
 /// Base trait to implement sending OSC over various transport methods
 pub trait OscSender {
@@ -69,7 +69,7 @@ impl OscSender for UdpSender {
 pub struct Server {
     sender_list: Vec<Box<dyn OscSender>>,
     source_name: String,
-    listener_list: Vec<Box<dyn Listener>>,
+    dispatcher: Dispatcher,
     session_id: i32,
     object_map: IndexMap<i32, Object>,
     object_updated: bool,
@@ -117,7 +117,7 @@ impl Server {
         Self {
             sender_list: vec![Box::new(osc_sender)],
             source_name: String::new(),
-            listener_list: Vec::new(),
+            dispatcher: Dispatcher::new(),
             session_id: -1,
             object_map: IndexMap::new(),
             object_updated: false,
@@ -318,7 +318,7 @@ impl Server {
     /// Generates and sends TUIO messages of all currently active and updated [Object]s, [Cursor]s and [Blob]s
     pub fn commit_frame(&mut self) {
         let frame_time = self.instant.elapsed();
-        for listener in &self.listener_list {
+        for listener in &self.dispatcher.listener_list {
             listener.refresh(frame_time);
         }
 
@@ -527,6 +527,18 @@ impl Server {
             sender.send_osc_packet(&packet).expect("invalid packet")
         }
     }
+
+    fn add_listener<L: Listener + 'static>(&mut self, listener: L) {
+        self.dispatcher.add_listener(listener);
+    }
+    
+    fn remove_listener<L: Listener + 'static>(&mut self, listener: L) {
+        self.dispatcher.remove_listener(listener);
+    }
+    
+    fn remove_all_listeners(&mut self) {
+        self.dispatcher.remove_all_listeners();
+    }
 }
 
 impl Drop for Server {
@@ -617,60 +629,5 @@ impl Drop for Server {
         });
 
         self.deliver_osc_packet(packet);
-    }
-}
-
-impl Dispatch for Server {
-    fn add_listener<L: Listener + 'static>(&mut self, listener: L) {
-        self.listener_list.push(Box::new(listener))
-    }
-
-    fn remove_listener<L: Listener + 'static>(&mut self, listener: L) {
-        let listener: Box<dyn Listener> = Box::new(listener);
-        self.listener_list.retain(|x| x == &listener)
-    }
-
-    fn remove_all_listeners(&mut self) {
-        self.listener_list.clear();
-    }
-
-    fn get_objects(&self) -> Vec<&Object> {
-        self.object_map.values().collect()
-    }
-
-    fn get_object_count(&self) -> usize {
-        self.object_map.len()
-    }
-
-    fn get_cursors(&self) -> Vec<&Cursor> {
-        self.cursor_map.values().collect()
-    }
-
-    fn get_cursor_count(&self) -> usize {
-        self.cursor_map.len()
-    }
-
-    fn get_blobs(&self) -> Vec<&Blob> {
-        self.blob_map.values().collect()
-    }
-
-    fn get_blob_count(&self) -> usize {
-        self.blob_map.len()
-    }
-
-    fn get_object(&self, session_id: i32) -> Option<&Object> {
-        self.object_map.get(&session_id)
-    }
-
-    fn get_cursor(&self, session_id: i32) -> Option<&Cursor> {
-        self.cursor_map.get(&session_id)
-    }
-
-    fn get_blob(&self, session_id: i32) -> Option<&Blob> {
-        self.blob_map.get(&session_id)
-    }
-
-    fn get_listeners(&mut self) -> &mut Vec<Box<dyn Listener>> {
-        &mut self.listener_list
     }
 }

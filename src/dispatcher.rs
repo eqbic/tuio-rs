@@ -19,59 +19,52 @@ pub trait Dispatch {
         /// Removes all Listener from the list of registered TUIO event listeners
         fn remove_all_listeners(&mut self);
 
-        fn get_listeners(&mut self) -> &mut Vec<Box<dyn Listener>>;
-
         /// Adds an [Object] to the listener
-        fn add_object(&mut self, object: &Object) {
-            for listener in self.get_listeners() {
-                listener.add_object(object);
-            }
-        }
+        fn add_object(&mut self, object: &Object);
+
+        /// Notifies a [Object] update
+        ///
+        /// # Arguments
+        /// * `object` - the updated [Object]
+        fn update_object(&mut self, object: &Object);
 
         /// Removes [Object]s
 		///
 		/// # Arguments
 		/// * `ids` - a slice of the IDs to remove
-        fn remove_objects(&mut self, ids: &[i32]) {
-            for listener in self.get_listeners() {
-                listener.remove_objects(ids);
-            }
-        }
+        fn remove_objects(&mut self, ids: &[i32]);
         
         /// Adds a [Cursor] to the listener
-        fn add_cursor(&mut self, cursor: &Cursor) {
-            for listener in self.get_listeners() {
-                listener.add_cursor(cursor);
-            }
-        }
+        fn add_cursor(&mut self, cursor: &Cursor);
+        
+        /// Notifies a [Cursor] update
+        ///
+        /// # Arguments
+        /// * `cursor` - the updated [Cursor]
+        fn update_cursor(&mut self, cursor: &Cursor);
 
         /// Removes [Cursor]s
 		///
 		/// # Arguments
 		/// * `ids` - a slice of the IDs to remove
-        fn remove_cursors(&mut self, ids: &[i32]) {
-            for listener in self.get_listeners() {
-                listener.remove_cursors(ids);
-            }
-        }
+        fn remove_cursors(&mut self, ids: &[i32]);
         
         /// Adds a [Blob] to the listener
-        fn add_blob(&mut self, blob: &Blob) {
-            for listener in self.get_listeners() {
-                listener.add_blob(blob);
-            }
-        }
+        fn add_blob(&mut self, blob: &Blob);
+
+        /// Notifies a [Blob] update
+        ///
+        /// # Arguments
+        /// * `blob` - the updated [Blob]
+        fn update_blob(&mut self, blob: &Blob);
 
         /// Removes [Blob]s
 		///
 		/// # Arguments
 		/// * `ids` - a slice of the IDs to remove
-        fn remove_blobs(&mut self, ids: &[i32]) {
-            for listener in self.get_listeners() {
-                listener.remove_blobs(ids);
-            }
-        }
-         
+        fn remove_blobs(&mut self, ids: &[i32]);
+
+        /* 
         /// Returns a slice of all currently active Objects
         fn get_objects(&self) -> Vec<&Object>;
  
@@ -107,4 +100,84 @@ pub trait Dispatch {
 		/// # Arguments
 		/// * `session_id` - the id of the blob
         fn get_blob(&self, session_id: i32) -> Option<&Blob>;
+        */
+}
+
+pub struct Dispatcher {
+    pub listener_list: Vec<Box<dyn Listener>>
+}
+
+impl Dispatcher {
+    pub fn new() -> Self {
+        Dispatcher { listener_list: Vec::new() }
+    }
+}
+
+impl Dispatch for Dispatcher {
+    fn add_listener<L: Listener + 'static>(&mut self, listener: L) {
+        self.listener_list.push(Box::new(listener))
+    }
+
+    fn remove_listener<L: Listener + 'static>(&mut self, listener: L) {
+        let listener: Box<dyn Listener> = Box::new(listener);
+        self.listener_list.retain(|x| x == &listener)
+    }
+
+    fn remove_all_listeners(&mut self) {
+        self.listener_list.clear();
+    }
+
+    fn add_object(&mut self, object: &Object) {
+        for listener in self.listener_list.iter_mut() {
+            listener.add_object(object);
+        }
+    }
+
+    fn update_object(&mut self, object: &Object) {
+        for listener in self.listener_list.iter_mut() {
+            listener.update_object(object);
+        }
+    }
+
+    fn remove_objects(&mut self, ids: &[i32]) {
+        for listener in self.listener_list.iter_mut() {
+            listener.remove_objects(ids);
+        }
+    }
+    
+    fn add_cursor(&mut self, cursor: &Cursor) {
+        for listener in self.listener_list.iter_mut() {
+            listener.add_cursor(cursor);
+        }
+    }
+
+    fn update_cursor(&mut self, cursor: &Cursor) {
+        for listener in self.listener_list.iter_mut() {
+            listener.update_cursor(cursor);
+        }
+    }
+
+    fn remove_cursors(&mut self, ids: &[i32]) {
+        for listener in self.listener_list.iter_mut() {
+            listener.remove_cursors(ids);
+        }
+    }
+    
+    fn add_blob(&mut self, blob: &Blob) {
+        for listener in self.listener_list.iter_mut() {
+            listener.add_blob(blob);
+        }
+    }
+
+    fn update_blob(&mut self, blob: &Blob) {
+        for listener in self.listener_list.iter_mut() {
+            listener.update_blob(blob);
+        }
+    }
+
+    fn remove_blobs(&mut self, ids: &[i32]) {
+        for listener in self.listener_list.iter_mut() {
+            listener.remove_blobs(ids);
+        }
+    }
 }

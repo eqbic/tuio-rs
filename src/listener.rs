@@ -9,6 +9,12 @@ pub trait Listener {
     /// Adds an [Object] to the listener
     fn add_object(&mut self, object: &Object);
 
+    /// Notifies a [Object] update
+    ///
+    /// # Arguments
+    /// * `object` - the updated [Object]
+    fn update_object(&mut self, object: &Object) {}
+
     /// Removes [Object]s
     ///
     /// # Arguments
@@ -18,6 +24,12 @@ pub trait Listener {
     /// Adds a [Cursor] to the listener
     fn add_cursor(&mut self, object: &Cursor);
 
+    /// Notifies a [Cursor] update
+    ///
+    /// # Arguments
+    /// * `cursor` - the updated [Cursor]
+    fn update_cursor(&mut self, cursor: &Cursor) {}
+
     /// Removes [Cursor]s
     ///
     /// # Arguments
@@ -26,6 +38,12 @@ pub trait Listener {
     
     /// Adds a [Blob] to the listener
     fn add_blob(&mut self, object: &Blob);
+
+    /// Notifies a [Blob] update
+    ///
+    /// # Arguments
+    /// * `blob` - the updated [Blob]
+    fn update_blob(&mut self, blob: &Blob) {}
 
     /// Removes [Blob]s
     ///
