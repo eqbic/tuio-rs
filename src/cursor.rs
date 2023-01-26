@@ -66,6 +66,12 @@ impl Cursor {
         }
     }
 
+    pub fn with_movement(mut self, velocity: Velocity, acceleration: f32) -> Self {
+        self.velocity = velocity;
+        self.acceleration = acceleration;
+        self
+    }
+
     pub fn get_id(&self) -> i32 {
         self.id
     }
@@ -115,5 +121,11 @@ impl Cursor {
         self.duration = time;
         
         self.state = if self.acceleration > 0f32 { State::Accelerating } else if self.acceleration < 0f32 { State::Decelerating } else { State::Stopped };
+    }
+
+    pub fn update_values(&mut self, position: Point, velocity: Velocity, acceleration: f32) {
+        self.path.push(position);
+        self.velocity = velocity;
+        self.acceleration = acceleration;
     }
 }
