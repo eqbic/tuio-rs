@@ -1,4 +1,4 @@
-use std::{time::{Instant, Duration}, net::{SocketAddr, IpAddr, Ipv4Addr, UdpSocket}, thread, sync::{atomic::{AtomicBool, Ordering, AtomicI32}, Arc}, collections::HashSet};
+use std::{time::{Instant, Duration}, net::{SocketAddr, IpAddr, Ipv4Addr, UdpSocket}, thread, sync::{atomic::{AtomicBool, Ordering, AtomicI32}, Arc}, collections::HashSet, fmt::Error, borrow::Borrow};
 
 use indexmap::IndexMap;
 use rosc::{OscPacket, OscMessage, OscType};
@@ -114,8 +114,40 @@ pub struct Client<O: OscReceiver> {
     local_receiver: bool
 }
 
+/// Keeps the entries whose keys are contained in a [HashSet]
+/// 
+/// Returns a [Vec<i32>] of removed ids
+/// 
+/// # Arguments
+/// * `index_map` - an [IndexMap<i32, T>] to filter
+/// * `to_keep` - an [HashSet<i32>] containing the keys to retain
+fn retain_by_ids<T>(index_map: &mut IndexMap<i32, T>, to_keep: HashSet<i32>) -> Vec<i32> {
+    let mut removed_ids = Vec::with_capacity(index_map.len());
 
-fn unwrap_object_args(args: &[OscType]) -> Result<ObjectParams, u8> {
+    index_map.retain(|key, _| {
+        let keep = to_keep.contains(key);
+        if !keep {
+            removed_ids.push(*key);
+        }
+        keep
+    });
+
+    removed_ids
+}
+
+fn try_unwrap_source_name(message: OscMessage) -> Result<String, TuioError> {
+    match message.args.get(1) {
+        Some(arg) => {
+            match arg.clone().string() {
+                Some(source_name) => Ok(source_name),
+                None => Err(TuioError::WrongArgumentTypeError(message, 1)),
+            }
+        },
+        None => Err(TuioError::MissingSourceError(message)),
+    }
+}
+
+fn try_unwrap_object_args(args: &[OscType]) -> Result<ObjectParams, u8> {
     let args = args.clone();
 
     Ok((
@@ -194,6 +226,11 @@ impl<O: OscReceiver> Client<O>{
         false
     }
 
+    fn set_source_name(&mut self, source_name: String) {
+        self.source_list.entry(source_name.to_string()).or_default();
+        self.source_name = source_name.to_owned();
+    }
+
     fn process_osc_message(&mut self, message: OscMessage) -> Result<(), TuioError> {
         match message.addr.as_str() {
             "/tuio/2Dobj" => {
@@ -201,35 +238,18 @@ impl<O: OscReceiver> Client<O>{
                     Some(OscType::String(arg)) => {
                         match arg.as_str() {
                             "source" => {
-                                if let Some(OscType::String(source_name)) = message.args.get(1) {
-                                    self.source_list.entry(source_name.to_string()).or_default();
-                                    self.source_name = source_name.to_owned();
-                                    Ok(())
-                                }
-                                else {
-                                    Err(TuioError::MissingSourceError(message))
-                                }
+                                self.set_source_name(try_unwrap_source_name(message)?);
+                                Ok(())
                             },
                             "alive" => {
                                 let to_keep: HashSet<i32> = HashSet::from_iter(message.args.into_iter().skip(1).filter_map(|e| e.int()));
                                 let object_map = &mut self.source_list.get_mut(&self.source_name).unwrap().object_map;
-
-                                let mut removed_ids = Vec::with_capacity(object_map.len());
-
-                                object_map.retain(|key, _| {
-                                    let keep = to_keep.contains(key);
-                                    if !keep {
-                                        removed_ids.push(*key);
-                                    }
-                                    keep
-                                });
-
-                                self.dispatcher.remove_objects(&removed_ids);
+                                self.dispatcher.remove_objects(&retain_by_ids(object_map, to_keep));
                                 Ok(())
                             },
                             "set" => {
                                 if message.args.len() == 11 {
-                                    match unwrap_object_args(&message.args) {
+                                    match try_unwrap_object_args(&message.args) {
                                         Ok(params) => {
                                             self.frame_objects.push(params);
                                             Ok(())
