@@ -294,7 +294,7 @@ impl<O: OscReceiver> Client<O>{
                                             match object_map.entry(session_id) {
                                                 indexmap::map::Entry::Occupied(mut entry) => {
                                                     let object = entry.get_mut();
-                                                    object.update_values(class_id, Point { x: x_pos, y: y_pos }, angle, Velocity{x: x_vel, y: y_vel}, angular_speed, acceleration, angular_acceleration);
+                                                    object.update_values(self.current_time, class_id, Point { x: x_pos, y: y_pos }, angle, Velocity{x: x_vel, y: y_vel}, angular_speed, acceleration, angular_acceleration);
                                                     self.dispatcher.update_object(object);
                                                 },
                                                 indexmap::map::Entry::Vacant(entry) => {
@@ -355,7 +355,7 @@ impl<O: OscReceiver> Client<O>{
                                             match cursor_map.entry(session_id) {
                                                 indexmap::map::Entry::Occupied(mut entry) => {
                                                     let cursor = entry.get_mut();
-                                                    cursor.update_values(Point { x: x_pos, y: y_pos }, Velocity{x: x_vel, y: y_vel}, acceleration);
+                                                    cursor.update_values(self.current_time, Point { x: x_pos, y: y_pos }, Velocity{x: x_vel, y: y_vel}, acceleration);
                                                     self.dispatcher.update_cursor(cursor);
                                                 },
                                                 indexmap::map::Entry::Vacant(entry) => {
@@ -416,7 +416,7 @@ impl<O: OscReceiver> Client<O>{
                                             match blob_map.entry(session_id) {
                                                 indexmap::map::Entry::Occupied(mut entry) => {
                                                     let blob = entry.get_mut();
-                                                    blob.update_values(Point { x: x_pos, y: y_pos }, angle, width, height, area, Velocity{x: x_vel, y: y_vel}, angular_speed, acceleration, angular_acceleration);
+                                                    blob.update_values(self.current_time, Point { x: x_pos, y: y_pos }, angle, width, height, area, Velocity{x: x_vel, y: y_vel}, angular_speed, acceleration, angular_acceleration);
                                                     self.dispatcher.update_blob(blob);
                                                 },
                                                 indexmap::map::Entry::Vacant(entry) => {

@@ -4,7 +4,7 @@ use crate::cursor::{Point, Velocity, State};
 
 pub struct Blob {
     session_id: i32,
-    duration: Duration,
+    time: Duration,
     path: Vec<Point>,
     velocity: Velocity,
     acceleration: f32,
@@ -22,7 +22,7 @@ impl Blob {
     pub fn new(time: Duration, session_id: i32, point: Point, angle: f32, width: f32, height: f32, area: f32) -> Self {
         Self { 
             session_id,
-            duration: time,
+            time,
             path: Vec::from([point]),
             velocity: Velocity::default(),
             acceleration: 0f32,
@@ -45,14 +45,15 @@ impl Blob {
     }
 
     pub fn get_time(&self) -> Duration {
-        self.duration
+        self.time
     }
 
     pub fn update(&mut self, time: Duration, point: Point, angle: f32, width: f32, height: f32, area: f32) {
         todo!()
     }
 
-    pub fn update_values(&mut self, position: Point, angle: f32, width: f32, height: f32, area: f32, velocity: Velocity, angular_speed: f32, acceleration: f32, angular_acceleration: f32) {
+    pub fn update_values(&mut self, time: Duration, position: Point, angle: f32, width: f32, height: f32, area: f32, velocity: Velocity, angular_speed: f32, acceleration: f32, angular_acceleration: f32) {
+        self.time = time;
         self.path.push(position);
         self.angle = angle;
         self.width = width;

@@ -5,7 +5,7 @@ use crate::cursor::{Point, Velocity, State};
 pub struct Object {
     session_id: i32,
     class_id: i32,
-    duration: Duration,
+    time: Duration,
     path: Vec<Point>,
     angle: f32,
     velocity: Velocity,
@@ -20,7 +20,7 @@ impl Object {
         Self { 
             session_id,
             class_id,
-            duration: time,
+            time,
             path: Vec::from([point]),
             velocity: Velocity::default(),
             acceleration: 0f32,
@@ -40,7 +40,7 @@ impl Object {
     }
 
     pub fn get_time(&self) -> Duration {
-        self.duration
+        self.time
     }
 
     pub fn get_class_id(&self) -> i32 {
@@ -87,7 +87,8 @@ impl Object {
         todo!()
     }
 
-    pub fn update_values(&mut self, class_id: i32, position: Point, angle: f32, velocity: Velocity, angular_speed: f32, acceleration: f32, angular_acceleration: f32) {
+    pub fn update_values(&mut self, time: Duration, class_id: i32, position: Point, angle: f32, velocity: Velocity, angular_speed: f32, acceleration: f32, angular_acceleration: f32) {
+        self.time = time;
         self.class_id = class_id;
         self.path.push(position);
         self.angle = angle;
