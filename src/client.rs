@@ -95,10 +95,10 @@ type CursorParams = (i32, f32, f32, f32, f32, f32);
 type BlobParams = (i32, f32, f32, f32, f32, f32, f32, f32, f32, f32, f32, f32);
 
 #[derive(Default)]
-struct SourceCollection {
-    object_map: IndexMap<i32, Object>,
-    blob_map: IndexMap<i32, Blob>,
-    cursor_map: IndexMap<i32, Cursor>
+pub struct SourceCollection {
+    pub object_map: IndexMap<i32, Object>,
+    pub blob_map: IndexMap<i32, Blob>,
+    pub cursor_map: IndexMap<i32, Cursor>
 }
 
 pub struct Client<O: OscReceiver> {
@@ -110,7 +110,7 @@ pub struct Client<O: OscReceiver> {
     frame_objects: Vec<ObjectParams>,
     frame_cursors: Vec<CursorParams>,
     frame_blobs: Vec<BlobParams>,
-    source_list: IndexMap<String, SourceCollection>,
+    pub source_list: IndexMap<String, SourceCollection>,
     source_id: u32,
     source_name: String,
     source_address: SocketAddr,
@@ -233,8 +233,9 @@ impl<O: OscReceiver> Client<O>{
     /// # Argument
     /// * `frame` - the new frame number
     fn update_frame(&mut self, frame: i32) -> bool {
-        if frame > 0 {
+        if frame >= 0 {
             let current_frame = self.current_frame.load(Ordering::SeqCst);
+            println!("current_frame {current_frame}");
             if frame > current_frame {
                 self.current_time = self.instant.elapsed();
             }
@@ -333,7 +334,7 @@ impl<O: OscReceiver> Client<O>{
                                 Ok(())
                             },
                             "set" => {
-                                if message.args.len() == 11 {
+                                if message.args.len() == 7 {
                                     match try_unwrap_cursor_args(&message.args) {
                                         Ok(params) => {
                                             self.frame_cursors.push(params);
@@ -444,7 +445,7 @@ impl<O: OscReceiver> Client<O>{
         }
     }
 
-    fn process_osc_packet(&mut self, packet: OscPacket) -> Result<(), TuioError> {
+    pub fn process_osc_packet(&mut self, packet: OscPacket) -> Result<(), TuioError> {
         match packet {
             OscPacket::Message(msg) => {
                 println!("OSC address: {}", msg.addr);

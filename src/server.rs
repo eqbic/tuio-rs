@@ -1,4 +1,4 @@
-use std::{net::{SocketAddr, UdpSocket, Ipv4Addr, Ipv6Addr, IpAddr}, sync::atomic::{AtomicI32, Ordering}, time::{SystemTime, Instant, Duration}};
+use std::{net::{SocketAddr, UdpSocket, Ipv4Addr, Ipv6Addr, IpAddr}, sync::atomic::{AtomicI32, Ordering}, time::{SystemTime, Instant, Duration}, error::Error};
 use rosc::{OscPacket, OscMessage, OscBundle, OscTime, OscError};
 use rosc::encoder;
 use rosc::OscType;
@@ -8,13 +8,13 @@ use indexmap::{IndexMap};
 use crate::{cursor::{Cursor, Point}, dispatcher::{Dispatch, Dispatcher}, listener::Listener, object::Object, blob::Blob, osc_encode_decode::{EncodeOsc, RoscEncoder, EncodingBehaviour}}; 
 
 /// Base trait to implement sending OSC over various transport methods
-pub trait OscSender {
+pub trait OscSender<P, E> where E: Error {
     /// Sends an [OscPacket].
     /// Returns an [OscError] if packet's encoding fails
     ///
     /// # Arguments
     /// * `packet` - a reference to an [OscPacket]
-    fn send_osc_packet(&self, packet: &OscPacket) -> Result<(), OscError>;
+    fn send_osc_packet(&self, packet: &P) -> Result<(), E>;
 
     /// Returns a true if the connection is established
     fn is_connected(&self) -> bool;
@@ -39,7 +39,7 @@ impl UdpSender {
     }
 }
 
-impl OscSender for UdpSender {
+impl OscSender<OscPacket, OscError> for UdpSender {
     /// Sends an [OscPacket] over UDP.
     /// Returns an [OscError] if packet's encoding fails
     ///
@@ -67,7 +67,7 @@ impl OscSender for UdpSender {
 ///- [ ] Object messaging
 ///- [ ] Blob messaging
 pub struct Server {
-    sender_list: Vec<Box<dyn OscSender>>,
+    sender_list: Vec<Box<dyn OscSender<OscPacket, OscError>>>,
     source_name: String,
     dispatcher: Dispatcher,
     session_id: i32,
@@ -112,7 +112,7 @@ impl Server {
     ///
     /// # Arguments
     /// * `osc_sender` - a sender implementing [OscSender]
-    pub fn from_osc_sender(osc_sender: impl OscSender + 'static) -> Self {
+    pub fn from_osc_sender(osc_sender: impl OscSender<OscPacket, OscError> + 'static) -> Self {
         Self {
             sender_list: vec![Box::new(osc_sender)],
             source_name: String::new(),
@@ -153,7 +153,7 @@ impl Server {
     ///
     /// # Arguments
     /// * `osc_sender` - a sender implementing [OscSender]
-    pub fn add_osc_sender(&mut self, osc_sender: impl OscSender + 'static) {
+    pub fn add_osc_sender(&mut self, osc_sender: impl OscSender<OscPacket, OscError> + 'static) {
         self.sender_list.push(Box::new(osc_sender));
     }
 

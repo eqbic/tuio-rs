@@ -1,6 +1,7 @@
 use std::time::{Duration};
 
 // #[derive(Clone, Copy)]
+#[derive(Default, Debug)]
 pub struct Point {
     pub x: f32,
     pub y: f32
@@ -14,7 +15,7 @@ impl Point {
     }
 }
 
-#[derive(Default, Clone, Copy)]
+#[derive(Default, Clone, Copy, Debug)]
 pub struct Velocity {
     pub x: f32,
     pub y: f32
@@ -26,13 +27,7 @@ impl Velocity {
     }
 }
 
-pub struct Source {
-    pub id: i32,
-    pub name: String,
-    pub address: String
-}
-
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, PartialEq, Debug)]
 pub enum State {
     Idle,
     Added,
@@ -44,10 +39,10 @@ pub enum State {
 }
 
 // #[derive(Clone, Copy)]
+#[derive(Debug)]
 pub struct Cursor {
     session_id: i32,
     time: Duration,
-    // source: Source,
     path: Vec<Point>,
     velocity: Velocity,
     acceleration: f32,
@@ -128,5 +123,11 @@ impl Cursor {
         self.path.push(position);
         self.velocity = velocity;
         self.acceleration = acceleration;
+    }
+}
+
+impl PartialEq for Cursor {
+    fn eq(&self, other: &Self) -> bool {
+        self.session_id == other.session_id && self.get_x_position() == other.get_x_position() && self.get_x_position() == other.get_y_position() && self.velocity.x == other.velocity.x && self.velocity.y == other.velocity.y && self.acceleration == other.acceleration
     }
 }
