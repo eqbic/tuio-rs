@@ -43,6 +43,10 @@ impl Object {
         self.time
     }
 
+    pub fn get_session_id(&self) -> i32 {
+        self.session_id
+    }
+
     pub fn get_class_id(&self) -> i32 {
         self.class_id
     }

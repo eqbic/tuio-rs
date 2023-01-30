@@ -5,7 +5,7 @@ use rosc::OscType;
 use local_ip_address::local_ip;
 use indexmap::{IndexMap};
 
-use crate::{cursor::{Cursor, Point}, dispatcher::{Dispatch, Dispatcher}, listener::Listener, object::Object, blob::Blob}; 
+use crate::{cursor::{Cursor, Point}, dispatcher::{Dispatch, Dispatcher}, listener::Listener, object::Object, blob::Blob, osc_encode_decode::{EncodeOsc, RoscEncoder, EncodingBehaviour}}; 
 
 /// Base trait to implement sending OSC over various transport methods
 pub trait OscSender {
@@ -80,8 +80,7 @@ pub struct Server {
     instant: Instant,
     current_frame_time: Duration,
     last_frame_id: AtomicI32,
-    /// Enables the full update of all currently active and inactive [Object]s, [Cursor]s and [Blob]s
-    pub full_update: bool,
+    encoding_behaviour: EncodingBehaviour,
     periodic_messaging: bool,
     update_interval: Duration,
     pub object_profiling: bool,
@@ -128,7 +127,7 @@ impl Server {
             instant: Instant::now(),
             current_frame_time: Duration::default(),
             last_frame_id: AtomicI32::new(0),
-            full_update: false,
+            encoding_behaviour: EncodingBehaviour::CurrentFrame,
             periodic_messaging: false,
             update_interval: Duration::from_secs(1),
             object_profiling: true,
@@ -138,6 +137,16 @@ impl Server {
             blob_profiling: true,
             blob_update_time: Duration::default(),
         }
+    }
+
+    /// Enables the full update of all currently active and inactive [Object]s, [Cursor]s and [Blob]s
+    pub fn enable_full_update(&mut self) {
+        self.encoding_behaviour = EncodingBehaviour::Full;
+    }
+
+    /// Disables the full update of all currently active and inactive [Object]s, [Cursor]s and [Blob]s
+    pub fn disable_full_update(&mut self) {
+        self.encoding_behaviour = EncodingBehaviour::CurrentFrame;
     }
 
     /// Adds an OSC sender implementing [OscSender] trait
@@ -323,203 +332,29 @@ impl Server {
         }
 
         if self.object_updated || (self.periodic_messaging && self.object_profiling && (self.current_frame_time - self.object_update_time) >= self.update_interval) {
-            self.deliver_osc_packet(self.build_object_bundle(self.full_update));
+            self.deliver_osc_packet(RoscEncoder::encode_object_packet(self.object_map.values(), self.source_name.clone(), self.current_frame_time, self.last_frame_id.load(Ordering::SeqCst), &self.encoding_behaviour));
             self.object_update_time = self.current_frame_time;
             self.object_updated = false;
         }
 
         if self.cursor_updated || (self.periodic_messaging && self.cursor_profiling && (self.current_frame_time - self.cursor_update_time) >= self.update_interval) {
-            self.deliver_osc_packet(self.build_cursor_bundle(self.full_update));
+            self.deliver_osc_packet(RoscEncoder::encode_cursor_packet(self.cursor_map.values(), self.source_name.clone(), self.current_frame_time, self.last_frame_id.load(Ordering::SeqCst), &self.encoding_behaviour));
             self.cursor_update_time = self.current_frame_time;
             self.cursor_updated = false;
         }
         
         if self.blob_updated || (self.periodic_messaging && self.blob_profiling && (self.current_frame_time - self.blob_update_time) >= self.update_interval) {
-            self.deliver_osc_packet(self.build_blob_bundle(self.full_update));
+            self.deliver_osc_packet(RoscEncoder::encode_blob_packet(self.blob_map.values(), self.source_name.clone(), self.current_frame_time, self.last_frame_id.load(Ordering::SeqCst), &self.encoding_behaviour));
             self.blob_update_time = self.current_frame_time;
             self.blob_updated = false;
         }
     }
 
-    fn build_object_bundle(&self, force_all: bool) -> OscPacket{
-        let source_message = OscPacket::Message(OscMessage {
-            addr: "/tuio/2Dobj".into(),
-            args: vec![
-                OscType::String("source".into()),
-                OscType::String(self.source_name.clone())
-            ]
-        });
-    
-        let mut set_messages = vec![];
-        let mut object_ids: Vec<OscType>= vec![];
-    
-        for (id, object) in &self.object_map  {
-            object_ids.push(OscType::Int(*id));
-            
-            if !force_all && object.get_time() != self.current_frame_time {
-                continue;
-            }
-    
-            set_messages.push(OscPacket::Message(OscMessage {
-                addr: "/tuio/2Dobj".into(),
-                args: vec![
-                    OscType::String("set".into()),
-                    OscType::Int(*id),
-                    OscType::Int(object.get_class_id()),
-                    OscType::Float(object.get_x_position()),
-                    OscType::Float(object.get_y_position()),
-                    OscType::Float(object.get_angle()),
-                    OscType::Float(object.get_x_velocity()),
-                    OscType::Float(object.get_y_velocity()),
-                    OscType::Float(object.get_angular_speed()),
-                    OscType::Float(object.get_acceleration()),
-                    OscType::Float(object.get_angular_acceleration())
-                ]
-            }));
-        }
-        
-        let alive_message = OscPacket::Message(OscMessage {
-            addr: "/tuio/2Dobj".into(),
-            args: vec![OscType::String("alive".into())].into_iter().chain(object_ids.into_iter()).collect()
-        });
-    
-        let frame_message = OscPacket::Message(OscMessage {
-            addr: "/tuio/2Dobj".into(),
-            args: vec![OscType::String("fseq".into()), OscType::Int(self.last_frame_id.load(Ordering::SeqCst))]
-        });
-    
-        OscPacket::Bundle(OscBundle { 
-            timetag: OscTime::try_from(SystemTime::now()).expect("failed with system time conversion"), 
-            content: vec![
-                source_message,
-                alive_message
-            ].into_iter()
-            .chain(set_messages.into_iter())
-            .chain(vec![frame_message].into_iter())
-            .collect()
-        })
-    }
-
-    fn build_cursor_bundle(&self, force_all: bool) -> OscPacket{
-        let source_message = OscPacket::Message(OscMessage {
-            addr: "/tuio/2Dcur".into(),
-            args: vec![
-                OscType::String("source".into()),
-                OscType::String(self.source_name.clone())
-            ]
-        });
-    
-        let mut set_messages = vec![];
-        let mut cursor_ids: Vec<OscType>= vec![];
-    
-        for (id, cursor) in &self.cursor_map  {
-            cursor_ids.push(OscType::Int(*id));
-            
-            if !force_all && cursor.get_time() != self.current_frame_time {
-                continue;
-            }
-
-            set_messages.push(OscPacket::Message(OscMessage {
-                addr: "/tuio/2Dcur".into(),
-                args: vec![
-                    OscType::String("set".into()),
-                    OscType::Int(*id),
-                    OscType::Float(cursor.get_x_position()),
-                    OscType::Float(cursor.get_y_position()),
-                    OscType::Float(cursor.get_x_velocity()),
-                    OscType::Float(cursor.get_y_velocity()),
-                    OscType::Float(cursor.get_acceleration())
-                ]
-            }));
-        }
-        
-        let alive_message = OscPacket::Message(OscMessage {
-            addr: "/tuio/2Dcur".into(),
-            args: vec![OscType::String("alive".into())].into_iter().chain(cursor_ids.into_iter()).collect()
-        });
-    
-        let frame_message = OscPacket::Message(OscMessage {
-            addr: "/tuio/2Dcur".into(),
-            args: vec![OscType::String("fseq".into()), OscType::Int(self.last_frame_id.load(Ordering::SeqCst))]
-        });
-    
-        OscPacket::Bundle(OscBundle { 
-            timetag: OscTime::try_from(SystemTime::now()).expect("failed with system time conversion"), 
-            content: vec![
-                source_message,
-                alive_message
-            ].into_iter()
-            .chain(set_messages.into_iter())
-            .chain(vec![frame_message].into_iter())
-            .collect()
-        })
-    }
-
-    fn build_blob_bundle(&self, force_all: bool) -> OscPacket{
-        let source_message = OscPacket::Message(OscMessage {
-            addr: "/tuio/2Dblb".into(),
-            args: vec![
-                OscType::String("source".into()),
-                OscType::String(self.source_name.clone())
-            ]
-        });
-    
-        let mut set_messages = vec![];
-        let mut blob_ids: Vec<OscType>= vec![];
-    
-        for (id, blob) in &self.blob_map {            
-            blob_ids.push(OscType::Int(*id));
-
-            if !force_all && blob.get_time() != self.current_frame_time {
-                continue;
-            }
-            
-            set_messages.push(OscPacket::Message(OscMessage {
-                addr: "/tuio/2Dblb".into(),
-                args: vec![
-                    OscType::String("set".into()),
-                    OscType::Int(*id),
-                    OscType::Float(blob.get_x_position()),
-                    OscType::Float(blob.get_y_position()),
-                    OscType::Float(blob.get_angle()),
-                    OscType::Float(blob.get_width()),
-                    OscType::Float(blob.get_height()),
-                    OscType::Float(blob.get_area()),
-                    OscType::Float(blob.get_x_velocity()),
-                    OscType::Float(blob.get_y_velocity()),
-                    OscType::Float(blob.get_angular_speed()),
-                    OscType::Float(blob.get_acceleration()),
-                    OscType::Float(blob.get_angular_acceleration())
-                ]
-            }));
-        }
-        
-        let alive_message = OscPacket::Message(OscMessage {
-            addr: "/tuio/2Dblb".into(),
-            args: vec![OscType::String("alive".into())].into_iter().chain(blob_ids.into_iter()).collect()
-        });
-    
-        let frame_message = OscPacket::Message(OscMessage {
-            addr: "/tuio/2Dblb".into(),
-            args: vec![OscType::String("fseq".into()), OscType::Int(self.last_frame_id.load(Ordering::SeqCst))]
-        });
-    
-        OscPacket::Bundle(OscBundle { 
-            timetag: OscTime::try_from(SystemTime::now()).expect("failed with system time conversion"), 
-            content: vec![
-                source_message,
-                alive_message
-            ].into_iter()
-            .chain(set_messages.into_iter())
-            .chain(vec![frame_message].into_iter())
-            .collect()
-        })
-    }
-
     pub fn send_full_messages(&self) {
-        self.deliver_osc_packet(self.build_object_bundle(true));
-        self.deliver_osc_packet(self.build_cursor_bundle(true));
-        self.deliver_osc_packet(self.build_blob_bundle(true));
+        let frame_id = self.last_frame_id.load(Ordering::SeqCst);
+        self.deliver_osc_packet(RoscEncoder::encode_object_packet(self.object_map.values(), self.source_name.clone(), self.current_frame_time, frame_id, &EncodingBehaviour::Full));
+        self.deliver_osc_packet(RoscEncoder::encode_cursor_packet(self.cursor_map.values(), self.source_name.clone(), self.current_frame_time, frame_id, &EncodingBehaviour::Full));
+        self.deliver_osc_packet(RoscEncoder::encode_blob_packet(self.blob_map.values(), self.source_name.clone(), self.current_frame_time, frame_id, &EncodingBehaviour::Full));
     }
     
     fn deliver_osc_packet(&self, packet: OscPacket) {

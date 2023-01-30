@@ -6,6 +6,7 @@ mod dispatcher;
 mod object;
 mod blob;
 mod errors;
+mod osc_encode_decode;
 
 
 pub fn add(left: usize, right: usize) -> usize {

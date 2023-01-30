@@ -65,6 +65,10 @@ impl Blob {
         self.angular_acceleration = angular_acceleration;
     }
 
+    pub fn get_session_id(&self) -> i32 {
+        self.session_id
+    }
+
     pub fn get_x_position(&self) -> f32 {
         self.path.last().unwrap().x
     }

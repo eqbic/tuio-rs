@@ -45,7 +45,7 @@ pub enum State {
 
 // #[derive(Clone, Copy)]
 pub struct Cursor {
-    id: i32,
+    session_id: i32,
     time: Duration,
     // source: Source,
     path: Vec<Point>,
@@ -55,9 +55,9 @@ pub struct Cursor {
 }
 
 impl Cursor {
-    pub fn new(time: Duration, id: i32/*, source: Source*/, position: Point) -> Self {
+    pub fn new(time: Duration, session_id: i32/*, source: Source*/, position: Point) -> Self {
         Self {
-            id,
+            session_id,
             path: Vec::from([position]),
             velocity: Velocity::default(),
             acceleration: 0f32,
@@ -72,8 +72,8 @@ impl Cursor {
         self
     }
 
-    pub fn get_id(&self) -> i32 {
-        self.id
+    pub fn get_session_id(&self) -> i32 {
+        self.session_id
     }
 
     pub fn get_time(&self) -> Duration {
