@@ -395,7 +395,7 @@ impl<O: OscReceiver> Client<O>{
                                 Ok(())
                             },
                             "set" => {
-                                if message.args.len() == 11 {
+                                if message.args.len() == 13 {
                                     match try_unwrap_blob_args(&message.args) {
                                         Ok(params) => {
                                             self.frame_blobs.push(params);

@@ -22,12 +22,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-
-    #[test]
     fn encoding_decoding() {
         let frame_time = Duration::default();
         let source = "test".to_string();
@@ -51,13 +45,12 @@ mod tests {
             Ok(_) => {},
             Err(err) => {println!("{err}"); assert!(false)},
         }
+
         match
          client.process_osc_packet(blob_packet) {
             Ok(_) => {},
             Err(err) => {println!("{err}"); assert!(false)},
         }
-        // client.process_osc_packet(object_packet);
-        // client.process_osc_packet(blob_packet);
 
         let collection = client.source_list.get(&source).unwrap();
 

@@ -1,7 +1,8 @@
-use std::time::{Duration};
+use std::time::Duration;
 
-use crate::cursor::{Point, Velocity, State};
+use crate::cursor::{Point, State, Velocity};
 
+#[derive(Debug)]
 pub struct Object {
     session_id: i32,
     class_id: i32,
@@ -12,12 +13,12 @@ pub struct Object {
     angular_speed: f32,
     acceleration: f32,
     angular_acceleration: f32,
-    state: State
+    state: State,
 }
 
 impl Object {
     pub fn new(time: Duration, session_id: i32, class_id: i32, point: Point, angle: f32) -> Self {
-        Self { 
+        Self {
             session_id,
             class_id,
             time,
@@ -27,11 +28,17 @@ impl Object {
             angle,
             angular_speed: 0f32,
             angular_acceleration: 0f32,
-            state: State::Added
+            state: State::Added,
         }
     }
 
-    pub fn with_movement(mut self, velocity: Velocity, angular_speed: f32, acceleration: f32, angular_acceleration: f32) -> Self {
+    pub fn with_movement(
+        mut self,
+        velocity: Velocity,
+        angular_speed: f32,
+        acceleration: f32,
+        angular_acceleration: f32,
+    ) -> Self {
         self.velocity = velocity;
         self.angular_speed = angular_speed;
         self.acceleration = acceleration;
@@ -91,7 +98,17 @@ impl Object {
         todo!()
     }
 
-    pub fn update_values(&mut self, time: Duration, class_id: i32, position: Point, angle: f32, velocity: Velocity, angular_speed: f32, acceleration: f32, angular_acceleration: f32) {
+    pub fn update_values(
+        &mut self,
+        time: Duration,
+        class_id: i32,
+        position: Point,
+        angle: f32,
+        velocity: Velocity,
+        angular_speed: f32,
+        acceleration: f32,
+        angular_acceleration: f32,
+    ) {
         self.time = time;
         self.class_id = class_id;
         self.path.push(position);
@@ -100,5 +117,45 @@ impl Object {
         self.angular_speed = angular_speed;
         self.acceleration = acceleration;
         self.angular_acceleration = angular_acceleration;
+    }
+}
+
+impl PartialEq for Object {
+    fn eq(&self, other: &Self) -> bool {
+        self.session_id == other.session_id
+            && self.class_id == other.class_id
+            && self.get_x_position() == other.get_x_position()
+            && self.get_x_position() == other.get_y_position()
+            && self.angle == other.angle
+            && self.velocity == other.velocity
+            && self.angular_speed == other.angular_speed
+            && self.acceleration == other.acceleration
+            && self.angular_acceleration == other.angular_acceleration
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use crate::{cursor::Point, object::Object};
+
+    #[test]
+    fn object_update() {
+        let mut object = Object::new(Duration::default(), 0, 0, Point { x: 0., y: 0. }, 0.);
+
+        object.update(
+            Duration::from_secs(1),
+            Point { x: 1., y: 1. },
+            90f32.to_radians(),
+        );
+
+        assert_eq!(object.get_x_position(), 1.);
+        assert_eq!(object.get_y_position(), 1.);
+        assert_eq!(object.get_x_velocity(), 1.);
+        assert_eq!(object.get_y_velocity(), 1.);
+        assert_eq!(object.get_acceleration(), 1.4142135);
+        assert_eq!(object.get_angular_speed(), 90f32.to_radians());
+        assert_eq!(object.get_acceleration(), 90f32.to_radians());
     }
 }

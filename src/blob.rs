@@ -1,7 +1,8 @@
-use std::time::{Duration};
+use std::time::Duration;
 
-use crate::cursor::{Point, Velocity, State};
+use crate::cursor::{Point, State, Velocity};
 
+#[derive(Debug)]
 pub struct Blob {
     session_id: i32,
     time: Duration,
@@ -14,13 +15,21 @@ pub struct Blob {
     width: f32,
     height: f32,
     area: f32,
-    state: State
+    state: State,
 }
 
 impl Blob {
     #[allow(clippy::too_many_arguments)]
-    pub fn new(time: Duration, session_id: i32, point: Point, angle: f32, width: f32, height: f32, area: f32) -> Self {
-        Self { 
+    pub fn new(
+        time: Duration,
+        session_id: i32,
+        point: Point,
+        angle: f32,
+        width: f32,
+        height: f32,
+        area: f32,
+    ) -> Self {
+        Self {
             session_id,
             time,
             path: Vec::from([point]),
@@ -32,11 +41,17 @@ impl Blob {
             width,
             height,
             area,
-            state: State::Added
+            state: State::Added,
         }
     }
 
-    pub fn with_movement(mut self, velocity: Velocity, angular_speed: f32, acceleration: f32, angular_acceleration: f32) -> Self {
+    pub fn with_movement(
+        mut self,
+        velocity: Velocity,
+        angular_speed: f32,
+        acceleration: f32,
+        angular_acceleration: f32,
+    ) -> Self {
         self.velocity = velocity;
         self.angular_speed = angular_speed;
         self.acceleration = acceleration;
@@ -48,11 +63,31 @@ impl Blob {
         self.time
     }
 
-    pub fn update(&mut self, time: Duration, point: Point, angle: f32, width: f32, height: f32, area: f32) {
+    pub fn update(
+        &mut self,
+        time: Duration,
+        point: Point,
+        angle: f32,
+        width: f32,
+        height: f32,
+        area: f32,
+    ) {
         todo!()
     }
 
-    pub fn update_values(&mut self, time: Duration, position: Point, angle: f32, width: f32, height: f32, area: f32, velocity: Velocity, angular_speed: f32, acceleration: f32, angular_acceleration: f32) {
+    pub fn update_values(
+        &mut self,
+        time: Duration,
+        position: Point,
+        angle: f32,
+        width: f32,
+        height: f32,
+        area: f32,
+        velocity: Velocity,
+        angular_speed: f32,
+        acceleration: f32,
+        angular_acceleration: f32,
+    ) {
         self.time = time;
         self.path.push(position);
         self.angle = angle;
@@ -104,7 +139,7 @@ impl Blob {
     pub fn get_width(&self) -> f32 {
         self.width
     }
-    
+
     pub fn get_height(&self) -> f32 {
         self.height
     }
@@ -112,7 +147,7 @@ impl Blob {
     pub fn get_pixel_width(&self, screen_width: u16) -> u16 {
         (self.width * screen_width as f32) as u16
     }
-    
+
     pub fn get_pixel_height(&self, screen_height: u16) -> u16 {
         (self.width * screen_height as f32) as u16
     }
@@ -120,9 +155,65 @@ impl Blob {
     pub fn get_area(&self) -> f32 {
         self.area
     }
-        
+
     pub fn get_state(&self) -> State {
         self.state
+    }
+}
+
+impl PartialEq for Blob {
+    fn eq(&self, other: &Self) -> bool {
+        self.session_id == other.session_id
+            && self.get_x_position() == other.get_x_position()
+            && self.get_x_position() == other.get_y_position()
+            && self.angle == other.angle
+            && self.velocity == other.velocity
+            && self.angular_speed == other.angular_speed
+            && self.acceleration == other.acceleration
+            && self.angular_acceleration == other.angular_acceleration
+            && self.width == other.width
+            && self.height == other.height
+            && self.area == other.area
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use crate::{blob::Blob, cursor::Point};
+
+    #[test]
+    fn blob_update() {
+        let mut blob = Blob::new(
+            Duration::default(),
+            0,
+            Point { x: 0., y: 0. },
+            0.,
+            0.,
+            0.,
+            0.,
+        );
+
+        blob.update(
+            Duration::from_secs(1),
+            Point { x: 1., y: 1. },
+            90f32.to_radians(),
+            0.5,
+            0.5,
+            0.25,
+        );
+
+        assert_eq!(blob.get_x_position(), 1.);
+        assert_eq!(blob.get_y_position(), 1.);
+        assert_eq!(blob.get_x_velocity(), 1.);
+        assert_eq!(blob.get_y_velocity(), 1.);
+        assert_eq!(blob.get_acceleration(), 1.4142135);
+        assert_eq!(blob.get_angular_speed(), 90f32.to_radians());
+        assert_eq!(blob.get_acceleration(), 90f32.to_radians());
+        assert_eq!(blob.get_width(), 0.5);
+        assert_eq!(blob.get_height(), 0.5);
+        assert_eq!(blob.get_area(), 0.25);
     }
 }
 
@@ -202,7 +293,7 @@ impl Rotating for Blob {
     fn set_angular_speed(&mut self, angular_speed: f32) {
         self.angular_speed = angular_speed;
     }
-    
+
     fn set_angular_acceleration(&mut self, angular_acceleration: f32) {
         self.angular_acceleration = angular_acceleration;
     }
