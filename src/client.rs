@@ -140,61 +140,6 @@ fn retain_by_ids<T>(index_map: &mut IndexMap<i32, T>, to_keep: HashSet<i32>) -> 
     removed_ids
 }
 
-fn try_unwrap_source_name(message: OscMessage) -> Result<String, TuioError> {
-    match message.args.get(1) {
-        Some(arg) => {
-            match arg.clone().string() {
-                Some(source_name) => Ok(source_name),
-                None => Err(TuioError::WrongArgumentTypeError(message, 1)),
-            }
-        },
-        None => Err(TuioError::MissingSourceError(message)),
-    }
-}
-
-fn try_unwrap_object_args(args: &[OscType]) -> Result<ObjectParams, u8> {
-    Ok((
-        args[1].clone().int().ok_or(1)?,
-        args[2].clone().int().ok_or(2)?,
-        args[3].clone().float().ok_or(3)?,
-        args[4].clone().float().ok_or(4)?,
-        args[5].clone().float().ok_or(5)?,
-        args[6].clone().float().ok_or(6)?,
-        args[7].clone().float().ok_or(7)?,
-        args[8].clone().float().ok_or(8)?,
-        args[9].clone().float().ok_or(9)?,
-        args[10].clone().float().ok_or(10)?
-    ))
-}
-
-fn try_unwrap_cursor_args(args: &[OscType]) -> Result<CursorParams, u8> {
-    Ok((
-        args[1].clone().int().ok_or(1)?,
-        args[2].clone().float().ok_or(2)?,
-        args[3].clone().float().ok_or(3)?,
-        args[4].clone().float().ok_or(4)?,
-        args[5].clone().float().ok_or(5)?,
-        args[6].clone().float().ok_or(6)?,
-    ))
-}
-
-fn try_unwrap_blob_args(args: &[OscType]) -> Result<BlobParams, u8> {
-    Ok((
-        args[1].clone().int().ok_or(1)?,
-        args[2].clone().float().ok_or(2)?,
-        args[3].clone().float().ok_or(3)?,
-        args[4].clone().float().ok_or(4)?,
-        args[5].clone().float().ok_or(5)?,
-        args[6].clone().float().ok_or(6)?,
-        args[7].clone().float().ok_or(7)?,
-        args[8].clone().float().ok_or(8)?,
-        args[9].clone().float().ok_or(9)?,
-        args[10].clone().float().ok_or(10)?,
-        args[11].clone().float().ok_or(11)?,
-        args[12].clone().float().ok_or(12)?,
-    ))
-}
-
 impl<O: OscReceiver> Client<O>{
     pub fn new() -> Result<Self, std::io::Error> {
         Self::from_port(3333)

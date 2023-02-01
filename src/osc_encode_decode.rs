@@ -2,20 +2,48 @@ use std::{time::{Duration, SystemTime}, iter};
 
 use rosc::{OscBundle, OscPacket, OscMessage, OscType, OscTime};
 
-use crate::{object::Object, cursor::Cursor, blob::Blob};
+use crate::{object::Object, cursor::Cursor, blob::Blob, errors::TuioError};
 
 #[derive(PartialEq, Eq)]
+/// Signals the encoding behaviour
 pub enum EncodingBehaviour {
+    /// Encodes only the TUIO elements updated during the current frame
     CurrentFrame,
+    /// Encodes all alive TUIO elements
     Full
 }
 
+/// Base trait to implement an OSC encoder
 pub trait EncodeOsc<T> {
+    /// Encodes an [Object] collection
+    /// # Arguments
+    /// * `object_collection` - an iterable [Object] collection
+    /// * `source_name` - the source's name
+    /// * `frame_time` - the current's frame time
+    /// * `frame_id` - the current's frame id
+    /// * `behaviour` - the encoding behaviour
     fn encode_object_packet<'a, I>(object_collection: I, source_name: String, frame_time: Duration, frame_id: i32, behaviour: &EncodingBehaviour) -> T where I: IntoIterator<Item = &'a Object>;
+
+    /// Encodes an [Cursor] collection
+    /// # Arguments
+    /// * `cursor_collection` - an iterable [Cursor] collection
+    /// * `source_name` - the source's name
+    /// * `frame_time` - the current's frame time
+    /// * `frame_id` - the current's frame id
+    /// * `behaviour` - the encoding behaviour
     fn encode_cursor_packet<'a, I>(cursor_collection: I, source_name: String, frame_time: Duration, frame_id: i32, behaviour: &EncodingBehaviour) -> T where I: IntoIterator<Item = &'a Cursor>;
+
+    /// Encodes an [Blob] collection
+    /// # Arguments
+    /// * `blob_collection` - an iterable [Blob] collection
+    /// * `source_name` - the source's name
+    /// * `frame_time` - the current's frame time
+    /// * `frame_id` - the current's frame id
+    /// * `behaviour` - the encoding behaviour
     fn encode_blob_packet<'a, I>(blob_collection: I, source_name: String, frame_time: Duration, frame_id: i32, behaviour: &EncodingBehaviour) -> T where I: IntoIterator<Item = &'a Blob>;
 }
 
+/// An implementation of trait [EncodeOsc] based on [rosc]
 pub struct RoscEncoder;
 
 impl EncodeOsc<OscPacket> for RoscEncoder {
@@ -195,5 +223,184 @@ impl EncodeOsc<OscPacket> for RoscEncoder {
             .chain(iter::once(frame_message))
             .collect()
         })
+    }
+}
+
+type ObjectParams = (i32, i32, f32, f32, f32, f32, f32, f32, f32, f32);
+type CursorParams = (i32, f32, f32, f32, f32, f32);
+type BlobParams = (i32, f32, f32, f32, f32, f32, f32, f32, f32, f32, f32, f32);
+
+/// An enum of a "set" TUIO message
+pub enum SetParams {
+    ObjectParams(Vec<ObjectParams>),
+    CursorParams(Vec<CursorParams>),
+    BlobParams(Vec<BlobParams>)
+}
+
+/// A struct containing informations of a TUIO bundle
+pub struct DecodedBundle {
+    source: String,
+    alive: Vec<i32>,
+    set: SetParams,
+    fseq: i32
+}
+
+/// Base trait to implement an OSC decoder
+pub trait DecodeOsc<T> {
+    fn decode_bundle(bundle: T) -> Result<DecodedBundle, TuioError>;
+}
+
+/// An implementation of trait [DecodeOsc] based on [rosc]
+pub struct RoscDecoder;
+
+fn try_unwrap_source_name(message: OscMessage) -> Result<String, TuioError> {
+    match message.args.get(1) {
+        Some(arg) => {
+            match arg.clone().string() {
+                Some(source_name) => Ok(source_name),
+                None => Err(TuioError::WrongArgumentTypeError(message, 1)),
+            }
+        },
+        None => Err(TuioError::MissingSourceError(message)),
+    }
+}
+
+fn try_unwrap_object_args(args: &[OscType]) -> Result<ObjectParams, u8> {
+    Ok((
+        args[1].clone().int().ok_or(1)?,
+        args[2].clone().int().ok_or(2)?,
+        args[3].clone().float().ok_or(3)?,
+        args[4].clone().float().ok_or(4)?,
+        args[5].clone().float().ok_or(5)?,
+        args[6].clone().float().ok_or(6)?,
+        args[7].clone().float().ok_or(7)?,
+        args[8].clone().float().ok_or(8)?,
+        args[9].clone().float().ok_or(9)?,
+        args[10].clone().float().ok_or(10)?
+    ))
+}
+
+fn try_unwrap_cursor_args(args: &[OscType]) -> Result<CursorParams, u8> {
+    Ok((
+        args[1].clone().int().ok_or(1)?,
+        args[2].clone().float().ok_or(2)?,
+        args[3].clone().float().ok_or(3)?,
+        args[4].clone().float().ok_or(4)?,
+        args[5].clone().float().ok_or(5)?,
+        args[6].clone().float().ok_or(6)?,
+    ))
+}
+
+fn try_unwrap_blob_args(args: &[OscType]) -> Result<BlobParams, u8> {
+    Ok((
+        args[1].clone().int().ok_or(1)?,
+        args[2].clone().float().ok_or(2)?,
+        args[3].clone().float().ok_or(3)?,
+        args[4].clone().float().ok_or(4)?,
+        args[5].clone().float().ok_or(5)?,
+        args[6].clone().float().ok_or(6)?,
+        args[7].clone().float().ok_or(7)?,
+        args[8].clone().float().ok_or(8)?,
+        args[9].clone().float().ok_or(9)?,
+        args[10].clone().float().ok_or(10)?,
+        args[11].clone().float().ok_or(11)?,
+        args[12].clone().float().ok_or(12)?,
+    ))
+}
+
+impl DecodeOsc<OscBundle> for RoscDecoder {
+    fn decode_bundle(bundle: OscBundle) -> Result<DecodedBundle, TuioError> {
+        let mut decoded_bundle: DecodedBundle;
+        let message: OscMessage;
+
+        println!("OSC Bundle: {:?}", bundle);
+        
+        match message.addr.as_str() {
+            "/tuio/2Dobj" => decoded_bundle.set = SetParams::ObjectParams(Vec::new()),
+            "/tuio/2Dcur" => decoded_bundle.set = SetParams::CursorParams(Vec::new()),
+            "/tuio/2Dblb" => decoded_bundle.set = SetParams::BlobParams(Vec::new()),
+            _ => return Err(TuioError::EmptyMessageError(message))
+        };
+
+        for packet in bundle.content {
+            match packet {
+                OscPacket::Message(msg) => {
+                    println!("OSC address: {}", msg.addr);
+                    println!("OSC arguments: {:?}", msg.args);
+                    
+                    message = msg;
+                }
+                OscPacket::Bundle(bundle) => {
+                    continue;
+                }
+            }
+
+            match message.args.first() {
+                Some(OscType::String(arg)) => {
+                    match arg.as_str() {
+                        "source" => {
+                            decoded_bundle.source = try_unwrap_source_name(message)?;
+                        },
+                        "alive" => {
+                            decoded_bundle.alive = message.args.into_iter().skip(1).filter_map(|e| e.int()).collect();
+                        },
+                        "set" => {
+                            match decoded_bundle.set {
+                                SetParams::ObjectParams(set) => {
+                                    if message.args.len() != 11 {
+                                        return Err(TuioError::MissingArgumentsError(message));
+                                    }
+                                    
+                                    match try_unwrap_object_args(&message.args) {
+                                        Ok(params) => {
+                                            set.push(params);
+                                        },
+                                        Err(index) => return Err(TuioError::WrongArgumentTypeError(message, index)),
+                                    }
+                                },
+                                SetParams::CursorParams(set) => {
+                                    if message.args.len() != 7 {
+                                        return Err(TuioError::MissingArgumentsError(message));
+                                    }
+
+                                    match try_unwrap_cursor_args(&message.args) {
+                                        Ok(params) => {
+                                            set.push(params);
+                                        },
+                                        Err(index) => return Err(TuioError::WrongArgumentTypeError(message, index)),
+                                    }
+                                },
+                                SetParams::BlobParams(set) => {
+                                    if message.args.len() != 13 {
+                                        return Err(TuioError::MissingArgumentsError(message));
+                                    }
+
+                                    match try_unwrap_blob_args(&message.args) {
+                                        Ok(params) => {
+                                            set.push(params);
+                                        },
+                                        Err(index) => return Err(TuioError::WrongArgumentTypeError(message, index)),
+                                    }
+                                },
+                                _ => {return Err(TuioError::EmptyMessageError(message))}
+                            };
+                        },
+                        "fseq" => {
+                            if let Some(OscType::Int(fseq)) = message.args.get(1) {
+                                decoded_bundle.fseq = *fseq;
+                            }
+                            else {
+                                return Err(TuioError::MissingArgumentsError(message))
+                            }
+                        },
+                        _ => return Err(TuioError::UnknownMessageTypeError(message))
+                    }
+                },
+                None => return Err(TuioError::EmptyMessageError(message)),
+                _ => return Err(TuioError::UnknownMessageTypeError(message))
+            }
+        }
+
+        Ok(decoded_bundle)
     }
 }
