@@ -5,7 +5,7 @@ use rosc::OscType;
 use local_ip_address::local_ip;
 use indexmap::{IndexMap};
 
-use crate::{cursor::{Cursor, Point}, dispatcher::{Dispatch, Dispatcher}, listener::Listener, object::Object, blob::Blob, osc_encode_decode::{EncodeOsc, RoscEncoder, EncodingBehaviour}}; 
+use crate::{cursor::{Cursor, Point}, object::Object, blob::Blob, osc_encode_decode::{EncodeOsc, RoscEncoder, EncodingBehaviour}}; 
 
 /// Base trait to implement sending OSC over various transport methods
 pub trait OscSender<P, E> where E: Error {
@@ -69,7 +69,6 @@ impl OscSender<OscPacket, OscError> for UdpSender {
 pub struct Server {
     sender_list: Vec<Box<dyn OscSender<OscPacket, OscError>>>,
     source_name: String,
-    dispatcher: Dispatcher,
     session_id: i32,
     object_map: IndexMap<i32, Object>,
     object_updated: bool,
@@ -116,7 +115,6 @@ impl Server {
         Self {
             sender_list: vec![Box::new(osc_sender)],
             source_name: String::new(),
-            dispatcher: Dispatcher::new(),
             session_id: -1,
             object_map: IndexMap::new(),
             object_updated: false,
@@ -289,6 +287,7 @@ impl Server {
         session_id
     }
 
+    #[allow(clippy::too_many_arguments)]
     /// Updates a TUIO [Blob]
     ///
     /// # Arguments
@@ -326,11 +325,6 @@ impl Server {
     /// 
     /// Generates and sends TUIO messages of all currently active and updated [Object]s, [Cursor]s and [Blob]s
     pub fn commit_frame(&mut self) {
-        let frame_time = self.instant.elapsed();
-        for listener in &self.dispatcher.listener_list {
-            listener.refresh(frame_time);
-        }
-
         if self.object_updated || (self.periodic_messaging && self.object_profiling && (self.current_frame_time - self.object_update_time) >= self.update_interval) {
             self.deliver_osc_packet(OscPacket::Bundle(RoscEncoder::encode_object_bundle(self.object_map.values(), self.source_name.clone(), self.current_frame_time, self.last_frame_id.load(Ordering::SeqCst), &self.encoding_behaviour)));
             self.object_update_time = self.current_frame_time;
@@ -361,18 +355,6 @@ impl Server {
         for sender in &self.sender_list {
             sender.send_osc_packet(&packet).expect("invalid packet")
         }
-    }
-
-    fn add_listener<L: Listener + 'static>(&mut self, listener: L) {
-        self.dispatcher.add_listener(listener);
-    }
-    
-    fn remove_listener<L: Listener + 'static>(&mut self, listener: L) {
-        self.dispatcher.remove_listener(listener);
-    }
-    
-    fn remove_all_listeners(&mut self) {
-        self.dispatcher.remove_all_listeners();
     }
 }
 
