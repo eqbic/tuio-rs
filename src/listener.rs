@@ -13,7 +13,7 @@ pub trait Listener {
     ///
     /// # Arguments
     /// * `object` - the updated [Object]
-    fn update_object(&mut self, object: &Object) {}
+    fn update_object(&mut self, object: &Object);
 
     /// Removes [Object]s
     ///
@@ -28,7 +28,7 @@ pub trait Listener {
     ///
     /// # Arguments
     /// * `cursor` - the updated [Cursor]
-    fn update_cursor(&mut self, cursor: &Cursor) {}
+    fn update_cursor(&mut self, cursor: &Cursor);
 
     /// Removes [Cursor]s
     ///
@@ -43,7 +43,7 @@ pub trait Listener {
     ///
     /// # Arguments
     /// * `blob` - the updated [Blob]
-    fn update_blob(&mut self, blob: &Blob) {}
+    fn update_blob(&mut self, blob: &Blob);
 
     /// Removes [Blob]s
     ///
