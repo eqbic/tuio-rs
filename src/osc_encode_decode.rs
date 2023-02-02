@@ -15,39 +15,39 @@ pub enum EncodingBehaviour {
 
 /// Base trait to implement an OSC encoder
 pub trait EncodeOsc<T> {
-    /// Encodes an [Object] collection
+    /// Encodes an [Object] collection into an OSC bundle
     /// # Arguments
     /// * `object_collection` - an iterable [Object] collection
     /// * `source_name` - the source's name
     /// * `frame_time` - the current's frame time
     /// * `frame_id` - the current's frame id
     /// * `behaviour` - the encoding behaviour
-    fn encode_object_packet<'a, I>(object_collection: I, source_name: String, frame_time: Duration, frame_id: i32, behaviour: &EncodingBehaviour) -> T where I: IntoIterator<Item = &'a Object>;
+    fn encode_object_bundle<'a, I>(object_collection: I, source_name: String, frame_time: Duration, frame_id: i32, behaviour: &EncodingBehaviour) -> T where I: IntoIterator<Item = &'a Object>;
 
-    /// Encodes an [Cursor] collection
+    /// Encodes an [Cursor] collection into an OSC bundle
     /// # Arguments
     /// * `cursor_collection` - an iterable [Cursor] collection
     /// * `source_name` - the source's name
     /// * `frame_time` - the current's frame time
     /// * `frame_id` - the current's frame id
     /// * `behaviour` - the encoding behaviour
-    fn encode_cursor_packet<'a, I>(cursor_collection: I, source_name: String, frame_time: Duration, frame_id: i32, behaviour: &EncodingBehaviour) -> T where I: IntoIterator<Item = &'a Cursor>;
+    fn encode_cursor_bundle<'a, I>(cursor_collection: I, source_name: String, frame_time: Duration, frame_id: i32, behaviour: &EncodingBehaviour) -> T where I: IntoIterator<Item = &'a Cursor>;
 
-    /// Encodes an [Blob] collection
+    /// Encodes an [Blob] collection into an OSC bundle
     /// # Arguments
     /// * `blob_collection` - an iterable [Blob] collection
     /// * `source_name` - the source's name
     /// * `frame_time` - the current's frame time
     /// * `frame_id` - the current's frame id
     /// * `behaviour` - the encoding behaviour
-    fn encode_blob_packet<'a, I>(blob_collection: I, source_name: String, frame_time: Duration, frame_id: i32, behaviour: &EncodingBehaviour) -> T where I: IntoIterator<Item = &'a Blob>;
+    fn encode_blob_bundle<'a, I>(blob_collection: I, source_name: String, frame_time: Duration, frame_id: i32, behaviour: &EncodingBehaviour) -> T where I: IntoIterator<Item = &'a Blob>;
 }
 
 /// An implementation of trait [EncodeOsc] based on [rosc]
 pub struct RoscEncoder;
 
-impl EncodeOsc<OscPacket> for RoscEncoder {
-    fn encode_object_packet<'a, I>(object_collection: I, source_name: String, frame_time: Duration, frame_id: i32, behaviour: &EncodingBehaviour) -> OscPacket where I: IntoIterator<Item = &'a Object> {
+impl EncodeOsc<OscBundle> for RoscEncoder {
+    fn encode_object_bundle<'a, I>(object_collection: I, source_name: String, frame_time: Duration, frame_id: i32, behaviour: &EncodingBehaviour) -> OscBundle where I: IntoIterator<Item = &'a Object> {
         let source_message = OscPacket::Message(OscMessage {
             addr: "/tuio/2Dobj".into(),
             args: vec![
@@ -95,7 +95,7 @@ impl EncodeOsc<OscPacket> for RoscEncoder {
             args: vec![OscType::String("fseq".into()), OscType::Int(frame_id)]
         });
     
-        OscPacket::Bundle(OscBundle { 
+        OscBundle { 
             timetag: OscTime::try_from(SystemTime::now()).expect("failed with system time conversion"), 
             content: vec![
                 source_message,
@@ -104,10 +104,10 @@ impl EncodeOsc<OscPacket> for RoscEncoder {
             .chain(set_messages.into_iter())
             .chain(iter::once(frame_message))
             .collect()
-        })
+        }
     }
 
-    fn encode_cursor_packet<'a, I>(cursor_collection: I, source_name: String, frame_time: Duration, frame_id: i32, behaviour: &EncodingBehaviour) -> OscPacket where I: IntoIterator<Item = &'a Cursor> {
+    fn encode_cursor_bundle<'a, I>(cursor_collection: I, source_name: String, frame_time: Duration, frame_id: i32, behaviour: &EncodingBehaviour) -> OscBundle where I: IntoIterator<Item = &'a Cursor> {
         let source_message = OscPacket::Message(OscMessage {
             addr: "/tuio/2Dcur".into(),
             args: vec![
@@ -151,7 +151,7 @@ impl EncodeOsc<OscPacket> for RoscEncoder {
             args: vec![OscType::String("fseq".into()), OscType::Int(frame_id)]
         });
     
-        OscPacket::Bundle(OscBundle { 
+        OscBundle { 
             timetag: OscTime::try_from(SystemTime::now()).expect("failed with system time conversion"), 
             content: vec![
                 source_message,
@@ -160,10 +160,10 @@ impl EncodeOsc<OscPacket> for RoscEncoder {
             .chain(set_messages.into_iter())
             .chain(iter::once(frame_message))
             .collect()
-        })
+        }
     }
 
-    fn encode_blob_packet<'a, I>(blob_collection: I, source_name: String, frame_time: Duration, frame_id: i32, behaviour: &EncodingBehaviour) -> OscPacket where I: IntoIterator<Item = &'a Blob> {
+    fn encode_blob_bundle<'a, I>(blob_collection: I, source_name: String, frame_time: Duration, frame_id: i32, behaviour: &EncodingBehaviour) -> OscBundle where I: IntoIterator<Item = &'a Blob> {
         let source_message = OscPacket::Message(OscMessage {
             addr: "/tuio/2Dblb".into(),
             args: vec![
@@ -213,7 +213,7 @@ impl EncodeOsc<OscPacket> for RoscEncoder {
             args: vec![OscType::String("fseq".into()), OscType::Int(frame_id)]
         });
     
-        OscPacket::Bundle(OscBundle { 
+        OscBundle { 
             timetag: OscTime::try_from(SystemTime::now()).expect("failed with system time conversion"), 
             content: vec![
                 source_message,
@@ -222,7 +222,7 @@ impl EncodeOsc<OscPacket> for RoscEncoder {
             .chain(set_messages.into_iter())
             .chain(iter::once(frame_message))
             .collect()
-        })
+        }
     }
 }
 

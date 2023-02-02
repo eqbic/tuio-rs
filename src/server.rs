@@ -9,11 +9,11 @@ use crate::{cursor::{Cursor, Point}, dispatcher::{Dispatch, Dispatcher}, listene
 
 /// Base trait to implement sending OSC over various transport methods
 pub trait OscSender<P, E> where E: Error {
-    /// Sends an [OscPacket].
-    /// Returns an [OscError] if packet's encoding fails
+    /// Sends an OSC packet.
+    /// Returns an [Error] if packet's encoding fails
     ///
     /// # Arguments
-    /// * `packet` - a reference to an [OscPacket]
+    /// * `packet` - a reference to an OSC packet
     fn send_osc_packet(&self, packet: &P) -> Result<(), E>;
 
     /// Returns a true if the connection is established
@@ -332,19 +332,19 @@ impl Server {
         }
 
         if self.object_updated || (self.periodic_messaging && self.object_profiling && (self.current_frame_time - self.object_update_time) >= self.update_interval) {
-            self.deliver_osc_packet(RoscEncoder::encode_object_packet(self.object_map.values(), self.source_name.clone(), self.current_frame_time, self.last_frame_id.load(Ordering::SeqCst), &self.encoding_behaviour));
+            self.deliver_osc_packet(OscPacket::Bundle(RoscEncoder::encode_object_bundle(self.object_map.values(), self.source_name.clone(), self.current_frame_time, self.last_frame_id.load(Ordering::SeqCst), &self.encoding_behaviour)));
             self.object_update_time = self.current_frame_time;
             self.object_updated = false;
         }
 
         if self.cursor_updated || (self.periodic_messaging && self.cursor_profiling && (self.current_frame_time - self.cursor_update_time) >= self.update_interval) {
-            self.deliver_osc_packet(RoscEncoder::encode_cursor_packet(self.cursor_map.values(), self.source_name.clone(), self.current_frame_time, self.last_frame_id.load(Ordering::SeqCst), &self.encoding_behaviour));
+            self.deliver_osc_packet(OscPacket::Bundle(RoscEncoder::encode_cursor_bundle(self.cursor_map.values(), self.source_name.clone(), self.current_frame_time, self.last_frame_id.load(Ordering::SeqCst), &self.encoding_behaviour)));
             self.cursor_update_time = self.current_frame_time;
             self.cursor_updated = false;
         }
         
         if self.blob_updated || (self.periodic_messaging && self.blob_profiling && (self.current_frame_time - self.blob_update_time) >= self.update_interval) {
-            self.deliver_osc_packet(RoscEncoder::encode_blob_packet(self.blob_map.values(), self.source_name.clone(), self.current_frame_time, self.last_frame_id.load(Ordering::SeqCst), &self.encoding_behaviour));
+            self.deliver_osc_packet(OscPacket::Bundle(RoscEncoder::encode_blob_bundle(self.blob_map.values(), self.source_name.clone(), self.current_frame_time, self.last_frame_id.load(Ordering::SeqCst), &self.encoding_behaviour)));
             self.blob_update_time = self.current_frame_time;
             self.blob_updated = false;
         }
@@ -352,9 +352,9 @@ impl Server {
 
     pub fn send_full_messages(&self) {
         let frame_id = self.last_frame_id.load(Ordering::SeqCst);
-        self.deliver_osc_packet(RoscEncoder::encode_object_packet(self.object_map.values(), self.source_name.clone(), self.current_frame_time, frame_id, &EncodingBehaviour::Full));
-        self.deliver_osc_packet(RoscEncoder::encode_cursor_packet(self.cursor_map.values(), self.source_name.clone(), self.current_frame_time, frame_id, &EncodingBehaviour::Full));
-        self.deliver_osc_packet(RoscEncoder::encode_blob_packet(self.blob_map.values(), self.source_name.clone(), self.current_frame_time, frame_id, &EncodingBehaviour::Full));
+        self.deliver_osc_packet(OscPacket::Bundle(RoscEncoder::encode_object_bundle(self.object_map.values(), self.source_name.clone(), self.current_frame_time, frame_id, &EncodingBehaviour::Full)));
+        self.deliver_osc_packet(OscPacket::Bundle(RoscEncoder::encode_cursor_bundle(self.cursor_map.values(), self.source_name.clone(), self.current_frame_time, frame_id, &EncodingBehaviour::Full)));
+        self.deliver_osc_packet(OscPacket::Bundle(RoscEncoder::encode_blob_bundle(self.blob_map.values(), self.source_name.clone(), self.current_frame_time, frame_id, &EncodingBehaviour::Full)));
     }
     
     fn deliver_osc_packet(&self, packet: OscPacket) {
