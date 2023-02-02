@@ -18,6 +18,7 @@ fn main() {
     std::thread::sleep(Duration::from_secs(2));
     server.init_frame();
     server.update_cursor(cursor_id, 1., 1.);
+    server.update_object(object_id, 1., 1., 90f32.to_radians() );
     
     // server.send_full_messages();
     server.commit_frame();
