@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use crate::cursor::{Point, State, Velocity};
+use crate::{cursor::{Point, State, Velocity}, osc_encode_decode::BlobParams};
 
 #[derive(Debug)]
 pub struct Blob {
@@ -19,7 +19,6 @@ pub struct Blob {
 }
 
 impl Blob {
-    #[allow(clippy::too_many_arguments)]
     pub fn new(
         time: Duration,
         session_id: i32,
@@ -75,6 +74,7 @@ impl Blob {
         todo!()
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn update_values(
         &mut self,
         time: Duration,
@@ -98,6 +98,19 @@ impl Blob {
         self.angular_speed = angular_speed;
         self.acceleration = acceleration;
         self.angular_acceleration = angular_acceleration;
+    }
+
+    pub fn update_from_params(&mut self, time: Duration, params: BlobParams) {
+        self.time = time;
+        self.path.push(Point{x: params.x_pos, y: params.y_pos});
+        self.angle = params.angle;
+        self.width = params.width;
+        self.height = params.height;
+        self.area = params.area;
+        self.velocity = Velocity{x: params.x_vel, y: params.y_vel};
+        self.angular_speed = params.angular_speed;
+        self.acceleration = params.acceleration;
+        self.angular_acceleration = params.angular_acceleration;
     }
 
     pub fn get_session_id(&self) -> i32 {
@@ -177,9 +190,34 @@ impl PartialEq for Blob {
     }
 }
 
+impl From<(Duration, BlobParams)> for Blob {
+    fn from((time, params): (Duration, BlobParams)) -> Self {
+        Self {
+            session_id: params.session_id,
+            path: vec![Point{x: params.x_pos, y: params.y_pos}],
+            angle: params.angle,
+            width: params.width,
+            height: params.height,
+            area: params.area,
+            velocity: Velocity{x: params.x_vel, y: params.y_vel},
+            angular_speed: params.angular_speed,
+            acceleration: params.acceleration,
+            angular_acceleration: params.angular_acceleration,
+            time,
+            state: State::Added,
+        }
+    }
+}
+
+impl From<BlobParams> for Blob {
+    fn from(params: BlobParams) -> Self {
+        (Duration::default(), params).into()
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use std::time::Duration;
+    use std::{time::Duration, f32::consts::SQRT_2};
 
     use crate::{blob::Blob, cursor::Point};
 
@@ -208,7 +246,7 @@ mod tests {
         assert_eq!(blob.get_y_position(), 1.);
         assert_eq!(blob.get_x_velocity(), 1.);
         assert_eq!(blob.get_y_velocity(), 1.);
-        assert_eq!(blob.get_acceleration(), 1.4142135);
+        assert_eq!(blob.get_acceleration(), SQRT_2);
         assert_eq!(blob.get_angular_speed(), 90f32.to_radians());
         assert_eq!(blob.get_acceleration(), 90f32.to_radians());
         assert_eq!(blob.get_width(), 0.5);

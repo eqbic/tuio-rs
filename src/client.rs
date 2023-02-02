@@ -1,9 +1,9 @@
-use std::{time::{Instant, Duration}, net::{SocketAddr, IpAddr, Ipv4Addr, UdpSocket}, thread, sync::{atomic::{AtomicBool, Ordering, AtomicI32}, Arc}, collections::HashSet, fmt::Error, borrow::Borrow};
+use std::{time::{Instant, Duration}, net::{SocketAddr, IpAddr, Ipv4Addr, UdpSocket}, thread, sync::{atomic::{AtomicBool, Ordering, AtomicI32}, Arc}, collections::HashSet};
 
 use indexmap::IndexMap;
-use rosc::{OscPacket, OscMessage, OscType, OscBundle};
+use rosc::{OscPacket};
 
-use crate::{cursor::{Cursor, Point, Velocity}, object::Object, blob::Blob, errors::TuioError, listener::{self, Listener}, dispatcher::{Dispatch, Dispatcher}};
+use crate::{cursor::{Cursor}, object::Object, blob::Blob, errors::TuioError, listener::{Listener}, dispatcher::{Dispatch, Dispatcher}, osc_encode_decode::{RoscDecoder, DecodeOsc, self, SetParams}};
 
 /// Base trait to implement receiving OSC over various transport methods
 pub trait OscReceiver {
@@ -90,10 +90,6 @@ impl Drop for UdpReceiver {
     }
 }
 
-type ObjectParams = (i32, i32, f32, f32, f32, f32, f32, f32, f32, f32);
-type CursorParams = (i32, f32, f32, f32, f32, f32);
-type BlobParams = (i32, f32, f32, f32, f32, f32, f32, f32, f32, f32, f32, f32);
-
 #[derive(Default)]
 pub struct SourceCollection {
     pub object_map: IndexMap<i32, Object>,
@@ -102,18 +98,10 @@ pub struct SourceCollection {
 }
 
 pub struct Client<O: OscReceiver> {
-    frame_cursor: Vec<Cursor>,
-    alive_cursor_id_list: Vec<u32>,
     current_frame: AtomicI32,
     instant: Instant,
     current_time: Duration,
-    frame_objects: Vec<ObjectParams>,
-    frame_cursors: Vec<CursorParams>,
-    frame_blobs: Vec<BlobParams>,
     pub source_list: IndexMap<String, SourceCollection>,
-    source_id: u32,
-    source_name: String,
-    source_address: SocketAddr,
     osc_receiver: O,
     dispatcher: Dispatcher,
     local_receiver: bool
@@ -146,20 +134,13 @@ impl<O: OscReceiver> Client<O>{
     }
 
     pub fn from_port(port: u16) -> Result<Self, std::io::Error> {
-        Ok(Self {instant: Instant::now(),
-            source_address: SocketAddr::new(IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0)), port),
+        Ok(Self {
+            instant: Instant::now(),
             osc_receiver: O::from_port(port)?,
-            frame_cursor: Vec::new(),
-            frame_cursors: Vec::new(),
-            frame_blobs: Vec::new(),
-            alive_cursor_id_list: Vec::new(),
             current_frame: (-1).into(),
             current_time: Duration::default(),
             source_list: IndexMap::new(),
-            source_id: 0,
-            source_name: String::default(),
             local_receiver: true,
-            frame_objects: Vec::new(),
             dispatcher: Dispatcher::new(),
         })
     }
@@ -189,236 +170,112 @@ impl<O: OscReceiver> Client<O>{
                 self.current_frame.store(frame, Ordering::SeqCst);
                 return true;
             }
-            else {
+            else if self.instant.elapsed() - self.current_time > Duration::from_millis(100){
+                self.current_time = self.instant.elapsed();
                 return false;
             }
         }
         false
     }
 
-    fn set_source_name(&mut self, source_name: String) {
-        self.source_list.entry(source_name.to_string()).or_default();
-        self.source_name = source_name.to_owned();
-    }
+    fn process_osc_packet(&mut self, packet: OscPacket) -> Result<(), TuioError> {
+        if let OscPacket::Bundle(bundle) = packet {
+            let decoded_bundle = RoscDecoder::decode_bundle(bundle)?;
+            
+            let to_keep: HashSet<i32> = HashSet::from_iter(decoded_bundle.alive);
+            
+            if self.update_frame(decoded_bundle.fseq) {
+                let source_collection = self.source_list.entry(decoded_bundle.source).or_default();
+                match decoded_bundle.tuio_type {
+                    osc_encode_decode::TuioBundleType::Cursor => {
+                        let cursor_map = &mut source_collection.cursor_map;
 
-    fn process_osc_message(&mut self, message: OscMessage) -> Result<(), TuioError> {
-        match message.addr.as_str() {
-            "/tuio/2Dobj" => {
-                match message.args.first() {
-                    Some(OscType::String(arg)) => {
-                        match arg.as_str() {
-                            "source" => {
-                                self.set_source_name(try_unwrap_source_name(message)?);
-                                Ok(())
-                            },
-                            "alive" => {
-                                let to_keep: HashSet<i32> = HashSet::from_iter(message.args.into_iter().skip(1).filter_map(|e| e.int()));
-                                let object_map = &mut self.source_list.get_mut(&self.source_name).unwrap().object_map;
-                                self.dispatcher.remove_objects(&retain_by_ids(object_map, to_keep));
-                                Ok(())
-                            },
-                            "set" => {
-                                if message.args.len() == 11 {
-                                    match try_unwrap_object_args(&message.args) {
-                                        Ok(params) => {
-                                            self.frame_objects.push(params);
-                                            Ok(())
-                                        },
-                                        Err(index) => Err(TuioError::WrongArgumentTypeError(message, index)),
-                                    }
-                                }
-                                else {
-                                    Err(TuioError::MissingArgumentsError(message))
-                                }
-                            },
-                            "fseq" => {
-                                if let Some(OscType::Int(fseq)) = message.args.get(1) {
-                                    if self.update_frame(*fseq) {
-                                        let object_map = &mut self.source_list.get_mut(&self.source_name).unwrap().object_map;
+                        self.dispatcher.remove_cursors(&retain_by_ids(cursor_map, to_keep));
 
-                                        for (session_id, class_id, x_pos, y_pos, angle, x_vel, y_vel, angular_speed, acceleration, angular_acceleration) in self.frame_objects.drain(..) {
-                                            match object_map.entry(session_id) {
-                                                indexmap::map::Entry::Occupied(mut entry) => {
-                                                    let object = entry.get_mut();
-                                                    object.update_values(self.current_time, class_id, Point { x: x_pos, y: y_pos }, angle, Velocity{x: x_vel, y: y_vel}, angular_speed, acceleration, angular_acceleration);
-                                                    self.dispatcher.update_object(object);
-                                                },
-                                                indexmap::map::Entry::Vacant(entry) => {
-                                                    let object = Object::new(self.current_time, session_id, class_id, Point { x: x_pos, y: y_pos }, angle).with_movement(Velocity{x: x_vel, y: y_vel}, angular_speed, acceleration, angular_acceleration);
-                                                    self.dispatcher.add_object(&object);
-                                                    entry.insert(object);
-                                                },
-                                            }
-                                        }
-                                    }
-                                    Ok(())
+                        if let Some(SetParams::Cursor(params_collection)) = decoded_bundle.set {
+                            for params in params_collection {
+                                match cursor_map.entry(params.session_id) {
+                                    indexmap::map::Entry::Occupied(mut entry) => {
+                                        let cursor = entry.get_mut();
+                                        cursor.update_from_params(self.current_time, params);
+                                        self.dispatcher.update_cursor(cursor);
+                                    },
+                                    indexmap::map::Entry::Vacant(entry) => {
+                                        let cursor = Cursor::from((self.current_time, params));
+                                        self.dispatcher.add_cursor(&cursor);
+                                        entry.insert(cursor);
+                                    },
                                 }
-                                else {
-                                    Err(TuioError::MissingArgumentsError(message))
-                                }
-                            },
-                            _ => Err(TuioError::UnknownMessageTypeError(message))
+                            }
                         }
-                    }
-                    None => Err(TuioError::EmptyMessageError(message)),
-                    _ => Err(TuioError::UnknownMessageTypeError(message))
-                }
-            },
-            "/tuio/2Dcur" => {
-                match message.args.first() {
-                    Some(OscType::String(arg)) => {
-                        match arg.as_str() {
-                            "source" => {
-                                self.set_source_name(try_unwrap_source_name(message)?);
-                                Ok(())
-                            },
-                            "alive" => {
-                                let to_keep: HashSet<i32> = HashSet::from_iter(message.args.into_iter().skip(1).filter_map(|e| e.int()));
-                                let cursor_map = &mut self.source_list.get_mut(&self.source_name).unwrap().cursor_map;
-                                self.dispatcher.remove_objects(&retain_by_ids(cursor_map, to_keep));
-                                Ok(())
-                            },
-                            "set" => {
-                                if message.args.len() == 7 {
-                                    match try_unwrap_cursor_args(&message.args) {
-                                        Ok(params) => {
-                                            self.frame_cursors.push(params);
-                                            Ok(())
-                                        },
-                                        Err(index) => Err(TuioError::WrongArgumentTypeError(message, index)),
-                                    }
-                                }
-                                else {
-                                    Err(TuioError::MissingArgumentsError(message))
-                                }
-                            },
-                            "fseq" => {
-                                if let Some(OscType::Int(fseq)) = message.args.get(1) {
-                                    if self.update_frame(*fseq) {
-                                        let cursor_map = &mut self.source_list.get_mut(&self.source_name).unwrap().cursor_map;
+                    },
+                    osc_encode_decode::TuioBundleType::Object => {
+                        let object_map = &mut source_collection.object_map;
 
-                                        for (session_id, x_pos, y_pos, x_vel, y_vel, acceleration) in self.frame_cursors.drain(..) {
-                                            match cursor_map.entry(session_id) {
-                                                indexmap::map::Entry::Occupied(mut entry) => {
-                                                    let cursor = entry.get_mut();
-                                                    cursor.update_values(self.current_time, Point { x: x_pos, y: y_pos }, Velocity{x: x_vel, y: y_vel}, acceleration);
-                                                    self.dispatcher.update_cursor(cursor);
-                                                },
-                                                indexmap::map::Entry::Vacant(entry) => {
-                                                    let cursor = Cursor::new(self.current_time, session_id, Point { x: x_pos, y: y_pos }).with_movement(Velocity{x: x_vel, y: y_vel}, acceleration);
-                                                    self.dispatcher.add_cursor(&cursor);
-                                                    entry.insert(cursor);
-                                                },
-                                            }
-                                        }
-                                    }
-                                    Ok(())
-                                }
-                                else {
-                                    Err(TuioError::MissingArgumentsError(message))
-                                }
-                            },
-                            _ => Err(TuioError::UnknownMessageTypeError(message))
-                        }
-                    }
-                    None => Err(TuioError::EmptyMessageError(message)),
-                    _ => Err(TuioError::UnknownMessageTypeError(message))
-                }
-            },
-            "/tuio/2Dblb" => {
-                match message.args.first() {
-                    Some(OscType::String(arg)) => {
-                        match arg.as_str() {
-                            "source" => {
-                                self.set_source_name(try_unwrap_source_name(message)?);
-                                Ok(())
-                            },
-                            "alive" => {
-                                let to_keep: HashSet<i32> = HashSet::from_iter(message.args.into_iter().skip(1).filter_map(|e| e.int()));
-                                let blob_map = &mut self.source_list.get_mut(&self.source_name).unwrap().blob_map;
-                                self.dispatcher.remove_objects(&retain_by_ids(blob_map, to_keep));
-                                Ok(())
-                            },
-                            "set" => {
-                                if message.args.len() == 13 {
-                                    match try_unwrap_blob_args(&message.args) {
-                                        Ok(params) => {
-                                            self.frame_blobs.push(params);
-                                            Ok(())
-                                        },
-                                        Err(index) => Err(TuioError::WrongArgumentTypeError(message, index)),
-                                    }
-                                }
-                                else {
-                                    Err(TuioError::MissingArgumentsError(message))
-                                }
-                            },
-                            "fseq" => {
-                                if let Some(OscType::Int(fseq)) = message.args.get(1) {
-                                    if self.update_frame(*fseq) {
-                                        let blob_map = &mut self.source_list.get_mut(&self.source_name).unwrap().blob_map;
+                        self.dispatcher.remove_objects(&retain_by_ids(object_map, to_keep));
 
-                                        for (session_id, x_pos, y_pos, angle, width, height, area, x_vel, y_vel, angular_speed, acceleration, angular_acceleration) in self.frame_blobs.drain(..) {
-                                            match blob_map.entry(session_id) {
-                                                indexmap::map::Entry::Occupied(mut entry) => {
-                                                    let blob = entry.get_mut();
-                                                    blob.update_values(self.current_time, Point { x: x_pos, y: y_pos }, angle, width, height, area, Velocity{x: x_vel, y: y_vel}, angular_speed, acceleration, angular_acceleration);
-                                                    self.dispatcher.update_blob(blob);
-                                                },
-                                                indexmap::map::Entry::Vacant(entry) => {
-                                                    let blob = Blob::new(self.current_time, session_id, Point { x: x_pos, y: y_pos }, angle, width, height, area).with_movement(Velocity{x: x_vel, y: y_vel}, angular_speed, acceleration, angular_acceleration);
-                                                    self.dispatcher.add_blob(&blob);
-                                                    entry.insert(blob);
-                                                },
-                                            }
-                                        }
-                                    }
-                                    Ok(())
+                        if let Some(SetParams::Object(params_collection)) = decoded_bundle.set {
+                            for params in params_collection {
+                                match object_map.entry(params.session_id) {
+                                    indexmap::map::Entry::Occupied(mut entry) => {
+                                        let object = entry.get_mut();
+                                        object.update_from_params(self.current_time, params);
+                                        self.dispatcher.update_object(object);
+                                    },
+                                    indexmap::map::Entry::Vacant(entry) => {
+                                        let object = Object::from((self.current_time, params));
+                                        self.dispatcher.add_object(&object);
+                                        entry.insert(object);
+                                    },
                                 }
-                                else {
-                                    Err(TuioError::MissingArgumentsError(message))
-                                }
-                            },
-                            _ => Err(TuioError::UnknownMessageTypeError(message))
+                            }
                         }
-                    }
-                    None => Err(TuioError::EmptyMessageError(message)),
-                    _ => Err(TuioError::UnknownMessageTypeError(message))
+                    },
+                    osc_encode_decode::TuioBundleType::Blob => {
+                        let blob_map = &mut source_collection.blob_map;
+
+                        self.dispatcher.remove_blobs(&retain_by_ids(blob_map, to_keep));
+
+                        if let Some(SetParams::Blob(params_collection)) = decoded_bundle.set {
+                            for params in params_collection {
+                                match blob_map.entry(params.session_id) {
+                                    indexmap::map::Entry::Occupied(mut entry) => {
+                                        let blob = entry.get_mut();
+                                        blob.update_from_params(self.current_time, params);
+                                        self.dispatcher.update_blob(blob);
+                                    },
+                                    indexmap::map::Entry::Vacant(entry) => {
+                                        let blob = Blob::from((self.current_time, params));
+                                        self.dispatcher.add_blob(&blob);
+                                        entry.insert(blob);
+                                    },
+                                }
+                            }
+                        }
+                    },
+                    osc_encode_decode::TuioBundleType::Unknown => (),
                 }
-            },
-            _ => Err(TuioError::EmptyMessageError(message))
+            }
+            Ok(())
+        }
+        else {
+            Err(TuioError::NotABundle(packet))
         }
     }
 
-    pub fn process_osc_packet(&mut self, packet: OscPacket) -> Result<(), TuioError> {
-        match packet {
-            OscPacket::Message(msg) => {
-                println!("OSC address: {}", msg.addr);
-                println!("OSC arguments: {:?}", msg.args);
-                
-                self.process_osc_message(msg)
-            }
-            OscPacket::Bundle(bundle) => {
-                println!("OSC Bundle: {:?}", bundle);
-
-                for message in bundle.content {
-                    self.process_osc_packet(message)?
-                }
-
-                Ok(())
-            }
-        }
-    }
-
-    fn add_listener<L: Listener + 'static>(&mut self, listener: L) {
+    pub fn add_listener<L: Listener + 'static>(&mut self, listener: L) {
         self.dispatcher.add_listener(listener);
     }
     
-    fn remove_listener<L: Listener + 'static>(&mut self, listener: L) {
+    pub fn remove_listener<L: Listener + 'static>(&mut self, listener: L) {
         self.dispatcher.remove_listener(listener);
     }
     
-    fn remove_all_listeners(&mut self) {
+    pub fn remove_all_listeners(&mut self) {
         self.dispatcher.remove_all_listeners();
+    }
+
+    pub fn local_receiver(&self) -> bool {
+        self.local_receiver
     }
 }

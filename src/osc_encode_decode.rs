@@ -226,181 +226,283 @@ impl EncodeOsc<OscBundle> for RoscEncoder {
     }
 }
 
-type ObjectParams = (i32, i32, f32, f32, f32, f32, f32, f32, f32, f32);
-type CursorParams = (i32, f32, f32, f32, f32, f32);
-type BlobParams = (i32, f32, f32, f32, f32, f32, f32, f32, f32, f32, f32, f32);
+
+pub struct ObjectParams {
+    pub session_id: i32,
+    pub class_id: i32,
+    pub x_pos: f32,
+    pub y_pos: f32,
+    pub angle: f32,
+    pub x_vel: f32,
+    pub y_vel: f32,
+    pub angular_speed: f32,
+    pub acceleration: f32,
+    pub angular_acceleration: f32
+}
+
+pub struct CursorParams {
+    pub session_id: i32,
+    pub x_pos: f32,
+    pub y_pos: f32,
+    pub x_vel: f32,
+    pub y_vel: f32,
+    pub acceleration: f32
+}
+
+pub struct BlobParams {
+    pub session_id: i32,
+    pub x_pos: f32,
+    pub y_pos: f32,
+    pub angle: f32,
+    pub width: f32,
+    pub height: f32,
+    pub area: f32,
+    pub x_vel: f32,
+    pub y_vel: f32,
+    pub angular_speed: f32,
+    pub acceleration: f32,
+    pub angular_acceleration: f32
+}
 
 /// An enum of a "set" TUIO message
 pub enum SetParams {
-    ObjectParams(Vec<ObjectParams>),
-    CursorParams(Vec<CursorParams>),
-    BlobParams(Vec<BlobParams>)
+    Cursor(Vec<CursorParams>),
+    Object(Vec<ObjectParams>),
+    Blob(Vec<BlobParams>),
+}
+
+#[derive(Default)]
+pub enum TuioBundleType {
+    Cursor,
+    Object,
+    Blob,
+    #[default]
+    Unknown
 }
 
 /// A struct containing informations of a TUIO bundle
-pub struct DecodedBundle {
-    source: String,
-    alive: Vec<i32>,
-    set: SetParams,
-    fseq: i32
+#[derive(Default)]
+pub struct TuioBundle {
+    pub tuio_type: TuioBundleType,
+    pub source: String,
+    pub alive: Vec<i32>,
+    pub set: Option<SetParams>,
+    pub fseq: i32
 }
 
 /// Base trait to implement an OSC decoder
 pub trait DecodeOsc<T> {
-    fn decode_bundle(bundle: T) -> Result<DecodedBundle, TuioError>;
+    fn decode_bundle(bundle: T) -> Result<TuioBundle, TuioError>;
 }
 
 /// An implementation of trait [DecodeOsc] based on [rosc]
 pub struct RoscDecoder;
 
-fn try_unwrap_source_name(message: OscMessage) -> Result<String, TuioError> {
+fn try_unwrap_source_name(message: &OscMessage) -> Result<String, TuioError> {
     match message.args.get(1) {
         Some(arg) => {
             match arg.clone().string() {
                 Some(source_name) => Ok(source_name),
-                None => Err(TuioError::WrongArgumentTypeError(message, 1)),
+                None => Err(TuioError::WrongArgumentType(message.clone(), 1)),
             }
         },
-        None => Err(TuioError::MissingSourceError(message)),
+        None => Err(TuioError::MissingSource(message.clone())),
     }
 }
 
 fn try_unwrap_object_args(args: &[OscType]) -> Result<ObjectParams, u8> {
-    Ok((
-        args[1].clone().int().ok_or(1)?,
-        args[2].clone().int().ok_or(2)?,
-        args[3].clone().float().ok_or(3)?,
-        args[4].clone().float().ok_or(4)?,
-        args[5].clone().float().ok_or(5)?,
-        args[6].clone().float().ok_or(6)?,
-        args[7].clone().float().ok_or(7)?,
-        args[8].clone().float().ok_or(8)?,
-        args[9].clone().float().ok_or(9)?,
-        args[10].clone().float().ok_or(10)?
-    ))
+    Ok(ObjectParams {
+        session_id: args[1].clone().int().ok_or(1)?,
+        class_id: args[2].clone().int().ok_or(2)?,
+        x_pos: args[3].clone().float().ok_or(3)?,
+        y_pos: args[4].clone().float().ok_or(4)?,
+        angle: args[5].clone().float().ok_or(5)?,
+        x_vel: args[6].clone().float().ok_or(6)?,
+        y_vel: args[7].clone().float().ok_or(7)?,
+        angular_speed: args[8].clone().float().ok_or(8)?,
+        acceleration: args[9].clone().float().ok_or(9)?,
+        angular_acceleration: args[10].clone().float().ok_or(10)?,
+    })
 }
 
 fn try_unwrap_cursor_args(args: &[OscType]) -> Result<CursorParams, u8> {
-    Ok((
-        args[1].clone().int().ok_or(1)?,
-        args[2].clone().float().ok_or(2)?,
-        args[3].clone().float().ok_or(3)?,
-        args[4].clone().float().ok_or(4)?,
-        args[5].clone().float().ok_or(5)?,
-        args[6].clone().float().ok_or(6)?,
-    ))
+    Ok(CursorParams {
+        session_id: args[1].clone().int().ok_or(1)?,
+        x_pos: args[2].clone().float().ok_or(2)?,
+        y_pos: args[3].clone().float().ok_or(3)?,
+        x_vel: args[4].clone().float().ok_or(4)?,
+        y_vel: args[5].clone().float().ok_or(5)?,
+        acceleration: args[6].clone().float().ok_or(6)?,
+    })
 }
 
 fn try_unwrap_blob_args(args: &[OscType]) -> Result<BlobParams, u8> {
-    Ok((
-        args[1].clone().int().ok_or(1)?,
-        args[2].clone().float().ok_or(2)?,
-        args[3].clone().float().ok_or(3)?,
-        args[4].clone().float().ok_or(4)?,
-        args[5].clone().float().ok_or(5)?,
-        args[6].clone().float().ok_or(6)?,
-        args[7].clone().float().ok_or(7)?,
-        args[8].clone().float().ok_or(8)?,
-        args[9].clone().float().ok_or(9)?,
-        args[10].clone().float().ok_or(10)?,
-        args[11].clone().float().ok_or(11)?,
-        args[12].clone().float().ok_or(12)?,
-    ))
+    Ok(BlobParams {
+        session_id: args[1].clone().int().ok_or(1)?,
+        x_pos: args[2].clone().float().ok_or(2)?,
+        y_pos: args[3].clone().float().ok_or(3)?,
+        angle: args[4].clone().float().ok_or(4)?,
+        width: args[5].clone().float().ok_or(5)?,
+        height: args[6].clone().float().ok_or(6)?,
+        area: args[7].clone().float().ok_or(7)?,
+        x_vel: args[8].clone().float().ok_or(8)?,
+        y_vel: args[9].clone().float().ok_or(9)?,
+        angular_speed: args[10].clone().float().ok_or(10)?,
+        acceleration: args[11].clone().float().ok_or(11)?,
+        angular_acceleration: args[12].clone().float().ok_or(12)?,
+    })
 }
 
 impl DecodeOsc<OscBundle> for RoscDecoder {
-    fn decode_bundle(bundle: OscBundle) -> Result<DecodedBundle, TuioError> {
-        let mut decoded_bundle: DecodedBundle;
-        let message: OscMessage;
-
-        println!("OSC Bundle: {:?}", bundle);
+    fn decode_bundle(bundle: OscBundle) -> Result<TuioBundle, TuioError> {
+        let mut decoded_bundle = TuioBundle::default();
         
-        match message.addr.as_str() {
-            "/tuio/2Dobj" => decoded_bundle.set = SetParams::ObjectParams(Vec::new()),
-            "/tuio/2Dcur" => decoded_bundle.set = SetParams::CursorParams(Vec::new()),
-            "/tuio/2Dblb" => decoded_bundle.set = SetParams::BlobParams(Vec::new()),
-            _ => return Err(TuioError::EmptyMessageError(message))
-        };
+        for packet in &bundle.content {
+            if let OscPacket::Message(message) = packet {
+                match message.args.first() {
+                    Some(OscType::String(arg)) => {
+                        match arg.as_str() {
+                            "source" => {
+                                decoded_bundle.tuio_type = match message.addr.as_str() {
+                                    "/tuio/2Dobj" => TuioBundleType::Object,
+                                    "/tuio/2Dcur" => TuioBundleType::Cursor,
+                                    "/tuio/2Dblb" => TuioBundleType::Blob,
+                                    _ => return Err(TuioError::UnknownAddress(message.clone()))
+                                };
 
-        for packet in bundle.content {
-            match packet {
-                OscPacket::Message(msg) => {
-                    println!("OSC address: {}", msg.addr);
-                    println!("OSC arguments: {:?}", msg.args);
-                    
-                    message = msg;
+                                decoded_bundle.source = try_unwrap_source_name(message)?;
+                            },
+                            "alive" => {
+                                decoded_bundle.alive = message.args.iter().skip(1).filter_map(|e| e.clone().int()).collect();
+                            },
+                            "set" => {
+                                let set = decoded_bundle.set.get_or_insert(
+                                    match decoded_bundle.tuio_type {
+                                        TuioBundleType::Cursor => SetParams::Cursor(Vec::new()),
+                                        TuioBundleType::Object => SetParams::Object(Vec::new()),
+                                        TuioBundleType::Blob => SetParams::Blob(Vec::new()),
+                                        TuioBundleType::Unknown => return Err(TuioError::IncompleteBundle(bundle)),
+                                    }
+                                );
+    
+                                match set {
+                                    SetParams::Object(ref mut set) => {
+                                        if message.args.len() != 11 {
+                                            return Err(TuioError::MissingArguments(message.clone()));
+                                        }
+                                        
+                                        match try_unwrap_object_args(&message.args) {
+                                            Ok(params) => {
+                                                set.push(params);
+                                            },
+                                            Err(index) => return Err(TuioError::WrongArgumentType(message.clone(), index)),
+                                        }
+                                    },
+                                    SetParams::Cursor(ref mut set) => {
+                                        if message.args.len() != 7 {
+                                            return Err(TuioError::MissingArguments(message.clone()));
+                                        }
+    
+                                        match try_unwrap_cursor_args(&message.args) {
+                                            Ok(params) => {
+                                                set.push(params);
+                                            },
+                                            Err(index) => return Err(TuioError::WrongArgumentType(message.clone(), index)),
+                                        }
+                                    },
+                                    SetParams::Blob(ref mut set) => {
+                                        if message.args.len() != 13 {
+                                            return Err(TuioError::MissingArguments(message.clone()));
+                                        }
+    
+                                        match try_unwrap_blob_args(&message.args) {
+                                            Ok(params) => {
+                                                set.push(params);
+                                            },
+                                            Err(index) => return Err(TuioError::WrongArgumentType(message.clone(), index)),
+                                        }
+                                    }
+                                };
+                            },
+                            "fseq" => {
+                                if let Some(OscType::Int(fseq)) = message.args.get(1) {
+                                    decoded_bundle.fseq = *fseq;
+                                }
+                                else {
+                                    return Err(TuioError::MissingArguments(message.clone()))
+                                }
+                            },
+                            _ => return Err(TuioError::UnknownMessageType(message.clone()))
+                        }
+                    },
+                    None => return Err(TuioError::EmptyMessage(message.clone())),
+                    _ => return Err(TuioError::UnknownMessageType(message.clone()))
                 }
-                OscPacket::Bundle(bundle) => {
-                    continue;
-                }
-            }
-
-            match message.args.first() {
-                Some(OscType::String(arg)) => {
-                    match arg.as_str() {
-                        "source" => {
-                            decoded_bundle.source = try_unwrap_source_name(message)?;
-                        },
-                        "alive" => {
-                            decoded_bundle.alive = message.args.into_iter().skip(1).filter_map(|e| e.int()).collect();
-                        },
-                        "set" => {
-                            match decoded_bundle.set {
-                                SetParams::ObjectParams(set) => {
-                                    if message.args.len() != 11 {
-                                        return Err(TuioError::MissingArgumentsError(message));
-                                    }
-                                    
-                                    match try_unwrap_object_args(&message.args) {
-                                        Ok(params) => {
-                                            set.push(params);
-                                        },
-                                        Err(index) => return Err(TuioError::WrongArgumentTypeError(message, index)),
-                                    }
-                                },
-                                SetParams::CursorParams(set) => {
-                                    if message.args.len() != 7 {
-                                        return Err(TuioError::MissingArgumentsError(message));
-                                    }
-
-                                    match try_unwrap_cursor_args(&message.args) {
-                                        Ok(params) => {
-                                            set.push(params);
-                                        },
-                                        Err(index) => return Err(TuioError::WrongArgumentTypeError(message, index)),
-                                    }
-                                },
-                                SetParams::BlobParams(set) => {
-                                    if message.args.len() != 13 {
-                                        return Err(TuioError::MissingArgumentsError(message));
-                                    }
-
-                                    match try_unwrap_blob_args(&message.args) {
-                                        Ok(params) => {
-                                            set.push(params);
-                                        },
-                                        Err(index) => return Err(TuioError::WrongArgumentTypeError(message, index)),
-                                    }
-                                },
-                                _ => {return Err(TuioError::EmptyMessageError(message))}
-                            };
-                        },
-                        "fseq" => {
-                            if let Some(OscType::Int(fseq)) = message.args.get(1) {
-                                decoded_bundle.fseq = *fseq;
-                            }
-                            else {
-                                return Err(TuioError::MissingArgumentsError(message))
-                            }
-                        },
-                        _ => return Err(TuioError::UnknownMessageTypeError(message))
-                    }
-                },
-                None => return Err(TuioError::EmptyMessageError(message)),
-                _ => return Err(TuioError::UnknownMessageTypeError(message))
-            }
+            };
         }
 
         Ok(decoded_bundle)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::time::Duration;
+
+    use crate::{cursor::{Cursor, Point}, object::Object, blob::Blob, osc_encode_decode::{RoscEncoder, EncodeOsc, self}};
+
+    use super::*;
+
+    #[test]
+    fn encoding_decoding() {
+        let frame_time = Duration::default();
+        let source = "test".to_string();
+
+        let cursors = vec![Cursor::new(frame_time, 0, Point {x: 0., y: 0.}), Cursor::new(Duration::from_secs(0), 1, Point {x: 0.5, y: 0.5})];
+        let objects = vec![Object::new(frame_time, 0, 0, Point {x: 0., y: 0.}, 0.), Object::new(Duration::from_secs(0), 1, 1, Point {x: 0.5, y: 0.5}, 0.)];
+        let blobs = vec![Blob::new(frame_time, 0, Point {x: 0., y: 0.}, 0., 0.3, 0.3, 0.09), Blob::new(Duration::from_secs(0), 1, Point {x: 0.5, y: 0.5}, 0., 0.5, 0.5, 0.25)];
+
+        let cursor_bundle = RoscEncoder::encode_cursor_bundle(&cursors, source.clone(), frame_time, 0, &osc_encode_decode::EncodingBehaviour::CurrentFrame);
+        let object_bundle = RoscEncoder::encode_object_bundle(&objects, source.clone(), frame_time, 0, &osc_encode_decode::EncodingBehaviour::CurrentFrame);
+        let blob_bundle = RoscEncoder::encode_blob_bundle(&blobs, source, frame_time, 0, &osc_encode_decode::EncodingBehaviour::CurrentFrame);
+        
+        match RoscDecoder::decode_bundle(cursor_bundle) {
+            Ok(decoded_bundle) => {
+                if let Some(SetParams::Cursor(set)) = decoded_bundle.set {
+                    let decoded_cursors: Vec<Cursor> = set.into_iter().map(|params| params.into()).collect();
+    
+                    assert_eq!(decoded_cursors.len(), 2);
+                    assert_eq!(cursors[0], decoded_cursors[0]);
+                    assert_eq!(cursors[1], decoded_cursors[1]);
+                }
+            },
+            Err(err) => {println!("{err}"); panic!()},
+        }
+
+        match RoscDecoder::decode_bundle(object_bundle) {
+            Ok(decoded_bundle) => {
+                if let Some(SetParams::Object(set)) = decoded_bundle.set {
+                    let decoded_objects: Vec<Object> = set.into_iter().map(|params| params.into()).collect();
+    
+                    assert_eq!(decoded_objects.len(), 2);
+                    assert_eq!(objects[0], decoded_objects[0]);
+                    assert_eq!(objects[1], decoded_objects[1]);
+                }
+            },
+            Err(err) => {println!("{err}"); panic!()},
+        }
+
+        match RoscDecoder::decode_bundle(blob_bundle) {
+            Ok(decoded_bundle) => {
+                if let Some(SetParams::Blob(set)) = decoded_bundle.set {
+                    let decoded_blobs: Vec<Blob> = set.into_iter().map(|params| params.into()).collect();
+    
+                    assert_eq!(decoded_blobs.len(), 2);
+                    assert_eq!(blobs[0], decoded_blobs[0]);
+                    assert_eq!(blobs[1], decoded_blobs[1]);
+                }
+            },
+            Err(err) => {println!("{err}"); panic!()},
+        }
     }
 }

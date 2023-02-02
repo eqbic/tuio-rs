@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use crate::cursor::{Point, State, Velocity};
+use crate::{cursor::{Point, State, Velocity}, osc_encode_decode::ObjectParams};
 
 #[derive(Debug)]
 pub struct Object {
@@ -98,6 +98,7 @@ impl Object {
         todo!()
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn update_values(
         &mut self,
         time: Duration,
@@ -118,6 +119,17 @@ impl Object {
         self.acceleration = acceleration;
         self.angular_acceleration = angular_acceleration;
     }
+
+    pub fn update_from_params(&mut self, time: Duration, params: ObjectParams) {
+        self.time = time;
+        self.class_id = params.class_id;
+        self.path.push(Point{x: params.x_pos, y: params.y_pos});
+        self.angle = params.angle;
+        self.velocity = Velocity{x: params.x_vel, y: params.y_vel};
+        self.angular_speed = params.angular_speed;
+        self.acceleration = params.acceleration;
+        self.angular_acceleration = params.angular_acceleration;
+    }
 }
 
 impl PartialEq for Object {
@@ -134,9 +146,32 @@ impl PartialEq for Object {
     }
 }
 
+impl From<(Duration, ObjectParams)> for Object {
+    fn from((time, params): (Duration, ObjectParams)) -> Self {
+        Self {
+            session_id: params.session_id,
+            class_id: params.class_id,
+            time,
+            path: vec![Point{x: params.x_pos, y: params.y_pos}],
+            angle: params.angle,
+            velocity: Velocity{x: params.x_vel, y: params.y_vel},
+            angular_speed: params.angular_speed,
+            acceleration: params.acceleration,
+            angular_acceleration: params.angular_acceleration,
+            state: State::Added,
+        }
+    }
+}
+
+impl From<ObjectParams> for Object {
+    fn from(params: ObjectParams) -> Self {
+        (Duration::default(), params).into()
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use std::time::Duration;
+    use std::{time::Duration, f32::consts::SQRT_2};
 
     use crate::{cursor::Point, object::Object};
 
@@ -154,7 +189,7 @@ mod tests {
         assert_eq!(object.get_y_position(), 1.);
         assert_eq!(object.get_x_velocity(), 1.);
         assert_eq!(object.get_y_velocity(), 1.);
-        assert_eq!(object.get_acceleration(), 1.4142135);
+        assert_eq!(object.get_acceleration(), SQRT_2);
         assert_eq!(object.get_angular_speed(), 90f32.to_radians());
         assert_eq!(object.get_acceleration(), 90f32.to_radians());
     }

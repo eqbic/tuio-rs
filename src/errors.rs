@@ -1,26 +1,30 @@
 use std::fmt;
 
-use rosc::OscMessage;
+use rosc::{OscMessage, OscBundle, OscPacket};
 
 #[derive(Debug)]
 pub enum TuioError {
-    UnknownAddressError(OscMessage),
-    UnknownMessageTypeError(OscMessage),
-    EmptyMessageError(OscMessage),
-    MissingSourceError(OscMessage),
-    MissingArgumentsError(OscMessage),
-    WrongArgumentTypeError(OscMessage, u8),
+    UnknownAddress(OscMessage),
+    UnknownMessageType(OscMessage),
+    EmptyMessage(OscMessage),
+    MissingSource(OscMessage),
+    MissingArguments(OscMessage),
+    WrongArgumentType(OscMessage, u8),
+    IncompleteBundle(OscBundle),
+    NotABundle(OscPacket),
 }
 
 impl fmt::Display for TuioError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
-            TuioError::UnknownAddressError(msg) => write!(f, "unknown address: {:?}", msg.addr),
-            TuioError::UnknownMessageTypeError(msg) => write!(f, "unknown message type: {:?}", msg),
-            TuioError::EmptyMessageError(msg) => write!(f, "empty message at: {:?}", msg),
-            TuioError::MissingSourceError(msg) => write!(f, "missing source name at: {:?}", msg),
-            TuioError::MissingArgumentsError(msg) => write!(f, "missing one or more arguments at: {:?}", msg),
-            TuioError::WrongArgumentTypeError(msg, index) => write!(f, "wrong argument type at index {} in: {:?}", index, msg),
+            TuioError::UnknownAddress(msg) => write!(f, "unknown address: {:?}", msg.addr),
+            TuioError::UnknownMessageType(msg) => write!(f, "unknown message type: {:?}", msg),
+            TuioError::EmptyMessage(msg) => write!(f, "empty message at: {:?}", msg),
+            TuioError::MissingSource(msg) => write!(f, "missing source name at: {:?}", msg),
+            TuioError::MissingArguments(msg) => write!(f, "missing one or more arguments at: {:?}", msg),
+            TuioError::WrongArgumentType(msg, index) => write!(f, "wrong argument type at index {} in: {:?}", index, msg),
+            TuioError::IncompleteBundle(bundle) => write!(f, "missing one or more mandatory messages in: {:?}", bundle),
+            TuioError::NotABundle(packet) => write!(f, "OSC packet is not a bundle: {:?}", packet),
         }
     }
 }

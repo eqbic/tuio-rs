@@ -1,5 +1,7 @@
 use std::time::Duration;
 
+use crate::osc_encode_decode::CursorParams;
+
 // #[derive(Clone, Copy)]
 #[derive(Default, Debug)]
 pub struct Point {
@@ -140,6 +142,13 @@ impl Cursor {
         self.velocity = velocity;
         self.acceleration = acceleration;
     }
+
+    pub fn update_from_params(&mut self, time: Duration, params: CursorParams) {
+        self.time = time;
+        self.path.push(Point{x: params.x_pos, y: params.y_pos});
+        self.velocity = Velocity{x: params.x_vel, y: params.y_vel};
+        self.acceleration = params.acceleration;
+    }
 }
 
 impl PartialEq for Cursor {
@@ -152,9 +161,28 @@ impl PartialEq for Cursor {
     }
 }
 
+impl From<(Duration, CursorParams)> for Cursor {
+    fn from((time, params): (Duration, CursorParams)) -> Self {
+        Self {
+            session_id: params.session_id,
+            path: vec![Point{x: params.x_pos, y: params.y_pos}],
+            velocity: Velocity{x: params.x_vel, y: params.y_vel},
+            acceleration: params.acceleration,
+            time,
+            state: State::Added,
+        }
+    }
+}
+
+impl From<CursorParams> for Cursor {
+    fn from(params: CursorParams) -> Self {
+        (Duration::default(), params).into()
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use std::time::Duration;
+    use std::{time::Duration, f32::consts::SQRT_2};
 
     use crate::cursor::{Cursor, Point};
 
@@ -168,6 +196,6 @@ mod tests {
         assert_eq!(cursor.get_y_position(), 1.);
         assert_eq!(cursor.get_x_velocity(), 1.);
         assert_eq!(cursor.get_y_velocity(), 1.);
-        assert_eq!(cursor.get_acceleration(), 1.4142135);
+        assert_eq!(cursor.get_acceleration(), SQRT_2);
     }
 }
