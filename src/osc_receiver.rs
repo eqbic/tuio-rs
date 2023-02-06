@@ -1,5 +1,13 @@
-use std::{net::{UdpSocket, SocketAddr, IpAddr, Ipv4Addr}, sync::{Arc, atomic::{AtomicBool, Ordering}}, thread};
+use std::{
+    net::{IpAddr, Ipv4Addr, SocketAddr, UdpSocket},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex,
+    },
+    thread,
+};
 
+use ringbuffer::{ConstGenericRingBuffer, RingBufferWrite, RingBufferRead};
 use rosc::OscPacket;
 
 /// Base trait to implement receiving OSC over various transport methods
@@ -13,33 +21,31 @@ pub trait OscReceiver {
     /// Stops connection
     fn disconnect(&self);
 
-    fn from_port(port: u16) -> Result<Self, std::io::Error> where Self: Sized;
+    fn receive(&self) -> Vec<OscPacket>;
 }
 
 pub struct UdpReceiver {
     socket: Arc<UdpSocket>,
-    listen: Arc<AtomicBool>
+    listen: Arc<AtomicBool>,
+    packet_buffer: Arc<Mutex<ConstGenericRingBuffer<OscPacket, 16>>>
 }
 
 impl UdpReceiver {
+    /// Creates an [UdpReceiver] binded to the port 3333
     pub fn new() -> Result<Self, std::io::Error> {
         Self::from_port(3333)
     }
-
+    
+    /// Creates an [UdpReceiver] binded to the provided port
     pub fn from_port(port: u16) -> Result<Self, std::io::Error> {
-        Ok(Self {socket: Arc::new(UdpSocket::bind(SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port))?), listen: Arc::new(AtomicBool::new(false))})
-    }
-
-    fn handle_packet(packet: OscPacket) {
-        match packet {
-            OscPacket::Message(msg) => {
-                println!("OSC address: {}", msg.addr);
-                println!("OSC arguments: {:?}", msg.args);
-            }
-            OscPacket::Bundle(bundle) => {
-                println!("OSC Bundle: {:?}", bundle);
-            }
-        }
+        Ok(Self {
+            socket: Arc::new(UdpSocket::bind(SocketAddr::new(
+                IpAddr::V4(Ipv4Addr::LOCALHOST),
+                port,
+            ))?),
+            listen: Arc::new(AtomicBool::new(false)),
+            packet_buffer: Default::default()
+        })
     }
 }
 
@@ -51,13 +57,18 @@ impl OscReceiver for UdpReceiver {
         let listen = Arc::clone(&self.listen);
         let socket = Arc::clone(&self.socket);
 
+        let packet_buffer = self.packet_buffer.clone();
+
         thread::spawn(move || loop {
-            if !listen.load(Ordering::Relaxed) {break;}
+            if !listen.load(Ordering::Relaxed) {
+                break;
+            }
+            
             match socket.recv_from(&mut buf) {
                 Ok((size, addr)) => {
                     println!("Received packet with size {} from: {}", size, addr);
                     let (_, packet) = rosc::decoder::decode_udp(&buf[..size]).unwrap();
-                    Self::handle_packet(packet);
+                    packet_buffer.lock().unwrap().push(packet);
                 }
                 Err(e) => {
                     println!("Error receiving from socket: {}", e);
@@ -66,6 +77,8 @@ impl OscReceiver for UdpReceiver {
             }
         });
     }
+
+
 
     fn disconnect(&self) {
         self.listen.store(false, Ordering::Relaxed);
@@ -76,8 +89,9 @@ impl OscReceiver for UdpReceiver {
         true
     }
 
-    fn from_port(port: u16) -> Result<Self, std::io::Error> {
-        Ok(Self {socket: Arc::new(UdpSocket::bind(SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port))?), listen: Arc::new(AtomicBool::new(false))})
+    /// Returns a vector of all [OscPacket] received since the last call
+    fn receive(&self) -> Vec<OscPacket> {
+        self.packet_buffer.lock().unwrap().drain().collect()
     }
 }
 

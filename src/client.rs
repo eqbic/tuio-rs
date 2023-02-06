@@ -3,7 +3,7 @@ use std::{time::{Instant, Duration}, sync::{atomic::{Ordering, AtomicI32}}, coll
 use indexmap::IndexMap;
 use rosc::{OscPacket};
 
-use crate::{cursor::{Cursor}, object::Object, blob::Blob, errors::TuioError, listener::{Listener}, dispatcher::{Dispatch, Dispatcher}, osc_encode_decode::{RoscDecoder, DecodeOsc, self, SetParams}, osc_receiver::OscReceiver};
+use crate::{cursor::{Cursor}, object::Object, blob::Blob, errors::TuioError, listener::{Listener}, dispatcher::{Dispatch, Dispatcher}, osc_encode_decode::{RoscDecoder, DecodeOsc, self, SetParams}, osc_receiver::{OscReceiver, UdpReceiver}};
 
 #[derive(Default)]
 pub struct SourceCollection {
@@ -12,12 +12,12 @@ pub struct SourceCollection {
     pub cursor_map: IndexMap<i32, Cursor>
 }
 
-pub struct Client<O: OscReceiver> {
+pub struct Client {
     current_frame: AtomicI32,
     instant: Instant,
     current_time: Duration,
     pub source_list: IndexMap<String, SourceCollection>,
-    osc_receiver: O,
+    osc_receivers: Vec<Box<dyn OscReceiver>>,
     dispatcher: Dispatcher,
     local_receiver: bool
 }
@@ -43,7 +43,7 @@ fn retain_by_ids<T>(index_map: &mut IndexMap<i32, T>, to_keep: HashSet<i32>) -> 
     removed_ids
 }
 
-impl<O: OscReceiver> Client<O>{
+impl Client {
     pub fn new() -> Result<Self, std::io::Error> {
         Self::from_port(3333)
     }
@@ -51,7 +51,7 @@ impl<O: OscReceiver> Client<O>{
     pub fn from_port(port: u16) -> Result<Self, std::io::Error> {
         Ok(Self {
             instant: Instant::now(),
-            osc_receiver: O::from_port(port)?,
+            osc_receivers: vec![Box::new(UdpReceiver::from_port(port)?)],
             current_frame: (-1).into(),
             current_time: Duration::default(),
             source_list: IndexMap::new(),
@@ -61,11 +61,29 @@ impl<O: OscReceiver> Client<O>{
     }
 
     pub fn connect(&self) {
-        self.osc_receiver.connect();
+        for receiver in &self.osc_receivers {
+            receiver.connect();
+        }
     }
 
     pub fn disconnect(&self) {
-        self.osc_receiver.disconnect();
+        for receiver in &self.osc_receivers {
+            receiver.disconnect();
+        }
+    }
+
+    pub fn refresh(&mut self) -> Result<(), TuioError>{
+        let packets: Vec<OscPacket> = self.osc_receivers.iter().flat_map(|f| f.receive()).collect();
+
+        for packet in packets {
+            self.process_osc_packet(packet)?;
+        };
+
+
+        /// Tétais en train de gérer les événements de création ou d'update des éléments TUIO
+
+
+        Ok(())
     }
 
     /// Update frame parameters based on a frame number
