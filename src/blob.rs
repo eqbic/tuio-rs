@@ -1,6 +1,9 @@
-use std::time::Duration;
+use std::{time::Duration, f32::consts::PI};
 
-use crate::{cursor::{Point, State, Velocity}, osc_encode_decode::BlobParams};
+use crate::{
+    cursor::{Point, State, Velocity},
+    osc_encode_decode::BlobParams,
+};
 
 #[derive(Debug)]
 pub struct Blob {
@@ -10,8 +13,8 @@ pub struct Blob {
     velocity: Velocity,
     acceleration: f32,
     angle: f32,
-    angular_speed: f32,
-    angular_acceleration: f32,
+    rotation_speed: f32,
+    rotation_acceleration: f32,
     width: f32,
     height: f32,
     area: f32,
@@ -35,8 +38,8 @@ impl Blob {
             velocity: Velocity::default(),
             acceleration: 0f32,
             angle,
-            angular_speed: 0f32,
-            angular_acceleration: 0f32,
+            rotation_speed: 0f32,
+            rotation_acceleration: 0f32,
             width,
             height,
             area,
@@ -47,14 +50,14 @@ impl Blob {
     pub fn with_movement(
         mut self,
         velocity: Velocity,
-        angular_speed: f32,
+        rotation_speed: f32,
         acceleration: f32,
-        angular_acceleration: f32,
+        rotation_acceleration: f32,
     ) -> Self {
         self.velocity = velocity;
-        self.angular_speed = angular_speed;
+        self.rotation_speed = rotation_speed;
         self.acceleration = acceleration;
-        self.angular_acceleration = angular_acceleration;
+        self.rotation_acceleration = rotation_acceleration;
         self
     }
 
@@ -65,13 +68,49 @@ impl Blob {
     pub fn update(
         &mut self,
         time: Duration,
-        point: Point,
+        position: Point,
         angle: f32,
         width: f32,
         height: f32,
         area: f32,
     ) {
-        todo!()
+        let delta_time = (time - self.time).as_secs_f32();
+        let last_position = self.path.last().unwrap();
+
+        let distance = position.distance_from(last_position);
+        let delta_x = position.x - last_position.x;
+        let delta_y = position.y - last_position.y;
+
+        let last_speed = self.velocity.get_speed();
+        let speed = distance / delta_time;
+
+        self.velocity = Velocity {
+            x: delta_x / delta_time,
+            y: delta_y / delta_time,
+        };
+        
+        self.acceleration = (speed - last_speed) / delta_time;
+        self.path.push(position);
+
+        let delta_turn = (angle - self.angle) / (2. * PI);
+        let rotation_speed = delta_turn / delta_time;
+
+        self.rotation_acceleration = (rotation_speed - self.rotation_speed) / delta_time;
+        self.rotation_speed = rotation_speed;
+
+        self.width = width;
+        self.height = height;
+        self.area = area;
+
+        self.time = time;
+
+        self.state = if self.acceleration > 0f32 {
+            State::Accelerating
+        } else if self.acceleration < 0f32 {
+            State::Decelerating
+        } else {
+            State::Stopped
+        };
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -84,9 +123,9 @@ impl Blob {
         height: f32,
         area: f32,
         velocity: Velocity,
-        angular_speed: f32,
+        rotation_speed: f32,
         acceleration: f32,
-        angular_acceleration: f32,
+        rotation_acceleration: f32,
     ) {
         self.time = time;
         self.path.push(position);
@@ -95,22 +134,30 @@ impl Blob {
         self.height = height;
         self.area = area;
         self.velocity = velocity;
-        self.angular_speed = angular_speed;
+        self.rotation_speed = rotation_speed;
         self.acceleration = acceleration;
-        self.angular_acceleration = angular_acceleration;
+        self.rotation_acceleration = rotation_acceleration;
     }
 
     pub fn update_from_params(&mut self, time: Duration, params: BlobParams) {
-        self.time = time;
-        self.path.push(Point{x: params.x_pos, y: params.y_pos});
-        self.angle = params.angle;
-        self.width = params.width;
-        self.height = params.height;
-        self.area = params.area;
-        self.velocity = Velocity{x: params.x_vel, y: params.y_vel};
-        self.angular_speed = params.angular_speed;
-        self.acceleration = params.acceleration;
-        self.angular_acceleration = params.angular_acceleration;
+        self.update_values(
+            time,
+            Point {
+                x: params.x_pos,
+                y: params.y_pos,
+            },
+            params.angle,
+            params.width,
+            params.height,
+            params.area,
+            Velocity {
+                x: params.x_vel,
+                y: params.y_vel,
+            },
+            params.rotation_speed,
+            params.acceleration,
+            params.rotation_acceleration,
+        );
     }
 
     pub fn get_session_id(&self) -> i32 {
@@ -137,34 +184,42 @@ impl Blob {
         self.acceleration
     }
 
+    /// Returns the angle in radians
     pub fn get_angle(&self) -> f32 {
         self.angle
     }
 
-    pub fn get_angular_speed(&self) -> f32 {
-        self.angular_speed
+    /// Returns the rotation speed in turn per seconds
+    pub fn get_rotation_speed(&self) -> f32 {
+        self.rotation_speed
     }
 
-    pub fn get_angular_acceleration(&self) -> f32 {
-        self.angular_acceleration
+    /// Returns the rotation acceleration in turn per seconds squared
+    pub fn get_rotation_acceleration(&self) -> f32 {
+        self.rotation_acceleration
     }
 
+    /// Returns the normalized width
     pub fn get_width(&self) -> f32 {
         self.width
     }
 
+    /// Returns the normalized height
     pub fn get_height(&self) -> f32 {
         self.height
     }
 
+    /// Returns the width in screen space
     pub fn get_pixel_width(&self, screen_width: u16) -> u16 {
         (self.width * screen_width as f32) as u16
     }
 
+    /// Returns the height in screen space
     pub fn get_pixel_height(&self, screen_height: u16) -> u16 {
         (self.width * screen_height as f32) as u16
     }
 
+    /// Returns the normalized area
     pub fn get_area(&self) -> f32 {
         self.area
     }
@@ -181,9 +236,9 @@ impl PartialEq for Blob {
             && self.get_x_position() == other.get_y_position()
             && self.angle == other.angle
             && self.velocity == other.velocity
-            && self.angular_speed == other.angular_speed
+            && self.rotation_speed == other.rotation_speed
             && self.acceleration == other.acceleration
-            && self.angular_acceleration == other.angular_acceleration
+            && self.rotation_acceleration == other.rotation_acceleration
             && self.width == other.width
             && self.height == other.height
             && self.area == other.area
@@ -194,15 +249,21 @@ impl From<(Duration, BlobParams)> for Blob {
     fn from((time, params): (Duration, BlobParams)) -> Self {
         Self {
             session_id: params.session_id,
-            path: vec![Point{x: params.x_pos, y: params.y_pos}],
+            path: vec![Point {
+                x: params.x_pos,
+                y: params.y_pos,
+            }],
             angle: params.angle,
             width: params.width,
             height: params.height,
             area: params.area,
-            velocity: Velocity{x: params.x_vel, y: params.y_vel},
-            angular_speed: params.angular_speed,
+            velocity: Velocity {
+                x: params.x_vel,
+                y: params.y_vel,
+            },
+            rotation_speed: params.rotation_speed,
             acceleration: params.acceleration,
-            angular_acceleration: params.angular_acceleration,
+            rotation_acceleration: params.rotation_acceleration,
             time,
             state: State::Added,
         }
@@ -217,7 +278,7 @@ impl From<BlobParams> for Blob {
 
 #[cfg(test)]
 mod tests {
-    use std::{time::Duration, f32::consts::SQRT_2};
+    use std::{f32::consts::SQRT_2, time::Duration};
 
     use crate::{blob::Blob, cursor::Point};
 
@@ -247,111 +308,10 @@ mod tests {
         assert_eq!(blob.get_x_velocity(), 1.);
         assert_eq!(blob.get_y_velocity(), 1.);
         assert_eq!(blob.get_acceleration(), SQRT_2);
-        assert_eq!(blob.get_angular_speed(), 90f32.to_radians());
-        assert_eq!(blob.get_acceleration(), 90f32.to_radians());
+        assert_eq!(blob.get_rotation_speed(), 0.25);
+        assert_eq!(blob.get_rotation_acceleration(), 0.25);
         assert_eq!(blob.get_width(), 0.5);
         assert_eq!(blob.get_height(), 0.5);
         assert_eq!(blob.get_area(), 0.25);
     }
 }
-
-/*
-
-impl Moving for Blob {
-    fn get_delta_time(&self) -> f32 {
-        (self.instant.elapsed() - self.duration).as_secs_f32()
-    }
-
-    fn get_velocity(&self) -> Velocity {
-        self.velocity
-    }
-
-    fn get_last_point(&self) -> &Point {
-        self.path.last().unwrap()
-    }
-
-    fn set_point(&mut self, point: Point) {
-        self.path.push(point);
-    }
-
-    fn get_path(&self) -> &[Point] {
-        &self.path
-    }
-
-    fn get_speed(&self) -> f32 {
-        self.velocity.get_speed()
-    }
-
-    fn get_acceleration(&self) -> f32 {
-        self.acceleration
-    }
-
-    fn get_state(&self) -> State {
-        self.state
-    }
-
-    fn is_moving(&self) -> bool {
-        self.state == State::Accelerating || self.state == State::Decelerating || self.state == State::Rotating
-    }
-
-    fn set_velocity(&mut self, velocity: Velocity) {
-        self.velocity = velocity;
-    }
-
-    fn set_acceleration(&mut self, acceleration: f32) {
-        self.acceleration = acceleration;
-    }
-
-    fn set_state(&mut self, state: State) {
-        self.state = state;
-    }
-
-    fn set_duration(&mut self, duration: Duration) {
-        self.duration = duration;
-    }
-
-    fn get_instant(&self) -> Instant {
-        self.instant
-    }
-}
-
-impl Rotating for Blob {
-    fn get_angle(&self) -> f32 {
-        self.angle
-    }
-
-    fn set_angle(&mut self, angle: f32) {
-        self.angle = angle;
-    }
-
-    fn get_angular_speed(&self) -> f32 {
-        self.angular_speed
-    }
-
-    fn set_angular_speed(&mut self, angular_speed: f32) {
-        self.angular_speed = angular_speed;
-    }
-
-    fn set_angular_acceleration(&mut self, angular_acceleration: f32) {
-        self.angular_acceleration = angular_acceleration;
-    }
-}
-
-impl Update<(Point, f32, f32, f32, f32)> for Blob {
-    fn update(&mut self, (point, angle, width, height, area): (Point, f32, f32, f32, f32)) {
-        self.width = width;
-        self.height = height;
-        self.area = area;
-        self.update((point, angle));
-    }
-}
-
-impl Update<(Point, f32, f32, f32, f32, Velocity, f32, f32, f32)> for Blob {
-    fn update(&mut self, (point, angle, width, height, area, velocity, angular_speed, acceleration, angular_acceleration): (Point, f32, f32, f32, f32, Velocity, f32, f32, f32)) {
-        self.width = width;
-        self.height = height;
-        self.area = area;
-        self.update((point, angle, velocity, angular_speed, acceleration, angular_acceleration));
-    }
-}
-*/

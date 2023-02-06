@@ -78,9 +78,9 @@ impl EncodeOsc<OscBundle> for RoscEncoder {
                     OscType::Float(object.get_angle()),
                     OscType::Float(object.get_x_velocity()),
                     OscType::Float(object.get_y_velocity()),
-                    OscType::Float(object.get_angular_speed()),
+                    OscType::Float(object.get_rotation_speed()),
                     OscType::Float(object.get_acceleration()),
-                    OscType::Float(object.get_angular_acceleration())
+                    OscType::Float(object.get_rotation_acceleration())
                 ]
             }));
         }
@@ -196,9 +196,9 @@ impl EncodeOsc<OscBundle> for RoscEncoder {
                     OscType::Float(blob.get_area()),
                     OscType::Float(blob.get_x_velocity()),
                     OscType::Float(blob.get_y_velocity()),
-                    OscType::Float(blob.get_angular_speed()),
+                    OscType::Float(blob.get_rotation_speed()),
                     OscType::Float(blob.get_acceleration()),
-                    OscType::Float(blob.get_angular_acceleration())
+                    OscType::Float(blob.get_rotation_acceleration())
                 ]
             }));
         }
@@ -235,9 +235,9 @@ pub struct ObjectParams {
     pub angle: f32,
     pub x_vel: f32,
     pub y_vel: f32,
-    pub angular_speed: f32,
+    pub rotation_speed: f32,
     pub acceleration: f32,
-    pub angular_acceleration: f32
+    pub rotation_acceleration: f32
 }
 
 pub struct CursorParams {
@@ -259,9 +259,9 @@ pub struct BlobParams {
     pub area: f32,
     pub x_vel: f32,
     pub y_vel: f32,
-    pub angular_speed: f32,
+    pub rotation_speed: f32,
     pub acceleration: f32,
-    pub angular_acceleration: f32
+    pub rotation_acceleration: f32
 }
 
 /// An enum of a "set" TUIO message
@@ -319,9 +319,9 @@ fn try_unwrap_object_args(args: &[OscType]) -> Result<ObjectParams, u8> {
         angle: args[5].clone().float().ok_or(5)?,
         x_vel: args[6].clone().float().ok_or(6)?,
         y_vel: args[7].clone().float().ok_or(7)?,
-        angular_speed: args[8].clone().float().ok_or(8)?,
+        rotation_speed: args[8].clone().float().ok_or(8)?,
         acceleration: args[9].clone().float().ok_or(9)?,
-        angular_acceleration: args[10].clone().float().ok_or(10)?,
+        rotation_acceleration: args[10].clone().float().ok_or(10)?,
     })
 }
 
@@ -347,9 +347,9 @@ fn try_unwrap_blob_args(args: &[OscType]) -> Result<BlobParams, u8> {
         area: args[7].clone().float().ok_or(7)?,
         x_vel: args[8].clone().float().ok_or(8)?,
         y_vel: args[9].clone().float().ok_or(9)?,
-        angular_speed: args[10].clone().float().ok_or(10)?,
+        rotation_speed: args[10].clone().float().ok_or(10)?,
         acceleration: args[11].clone().float().ok_or(11)?,
-        angular_acceleration: args[12].clone().float().ok_or(12)?,
+        rotation_acceleration: args[12].clone().float().ok_or(12)?,
     })
 }
 

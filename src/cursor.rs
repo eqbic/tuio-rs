@@ -10,7 +10,7 @@ pub struct Point {
 }
 
 impl Point {
-    fn distance_from(&self, point: &Point) -> f32 {
+    pub fn distance_from(&self, point: &Point) -> f32 {
         let dx = self.x - point.x;
         let dy = self.y - point.y;
         (dx * dx + dy * dy).sqrt()
