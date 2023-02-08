@@ -1,11 +1,11 @@
 use std::{time::Duration, f32::consts::PI};
 
 use crate::{
-    cursor::{Point, State, Velocity},
+    cursor::{Point, Velocity},
     osc_encode_decode::BlobParams,
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Blob {
     session_id: i32,
     time: Duration,
@@ -17,8 +17,7 @@ pub struct Blob {
     rotation_acceleration: f32,
     width: f32,
     height: f32,
-    area: f32,
-    state: State,
+    area: f32
 }
 
 impl Blob {
@@ -42,8 +41,7 @@ impl Blob {
             rotation_acceleration: 0f32,
             width,
             height,
-            area,
-            state: State::Added,
+            area
         }
     }
 
@@ -102,14 +100,6 @@ impl Blob {
         self.area = area;
 
         self.time = time;
-
-        self.state = if self.acceleration > 0f32 {
-            State::Accelerating
-        } else if self.acceleration < 0f32 {
-            State::Decelerating
-        } else {
-            State::Stopped
-        };
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -222,10 +212,6 @@ impl Blob {
     pub fn get_area(&self) -> f32 {
         self.area
     }
-
-    pub fn get_state(&self) -> State {
-        self.state
-    }
 }
 
 impl PartialEq for Blob {
@@ -263,8 +249,7 @@ impl From<(Duration, BlobParams)> for Blob {
             rotation_speed: params.rotation_speed,
             acceleration: params.acceleration,
             rotation_acceleration: params.rotation_acceleration,
-            time,
-            state: State::Added,
+            time
         }
     }
 }

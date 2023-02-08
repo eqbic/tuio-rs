@@ -2,8 +2,7 @@ use std::time::Duration;
 
 use crate::osc_encode_decode::CursorParams;
 
-// #[derive(Clone, Copy)]
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Clone)]
 pub struct Point {
     pub x: f32,
     pub y: f32,
@@ -29,26 +28,14 @@ impl Velocity {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Debug)]
-pub enum State {
-    Idle,
-    Added,
-    Accelerating,
-    Decelerating,
-    Rotating,
-    Stopped,
-    Removed,
-}
-
 // #[derive(Clone, Copy)]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Cursor {
     session_id: i32,
     time: Duration,
     position: Point,
     velocity: Velocity,
-    acceleration: f32,
-    state: State,
+    acceleration: f32
 }
 
 impl Cursor {
@@ -58,8 +45,7 @@ impl Cursor {
             position,
             velocity: Velocity::default(),
             acceleration: 0f32,
-            time,
-            state: State::Added,
+            time
         }
     }
 
@@ -97,10 +83,6 @@ impl Cursor {
         self.acceleration
     }
 
-    pub fn get_state(&self) -> State {
-        self.state
-    }
-
     pub fn update(&mut self, time: Duration, position: Point) {
         let delta_time = (time - self.time).as_secs_f32();
         let distance = position.distance_from(&self.position);
@@ -118,14 +100,6 @@ impl Cursor {
         self.acceleration = (speed - last_speed) / delta_time;
         self.position = position;
         self.time = time;
-
-        self.state = if self.acceleration > 0f32 {
-            State::Accelerating
-        } else if self.acceleration < 0f32 {
-            State::Decelerating
-        } else {
-            State::Stopped
-        };
     }
 
     pub fn update_values(
@@ -166,8 +140,7 @@ impl From<(Duration, CursorParams)> for Cursor {
             position: Point{x: params.x_pos, y: params.y_pos},
             velocity: Velocity{x: params.x_vel, y: params.y_vel},
             acceleration: params.acceleration,
-            time,
-            state: State::Added,
+            time
         }
     }
 }

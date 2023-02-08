@@ -1,8 +1,8 @@
 use std::{time::Duration, f32::consts::PI};
 
-use crate::{cursor::{Point, State, Velocity}, osc_encode_decode::ObjectParams};
+use crate::{cursor::{Point, Velocity}, osc_encode_decode::ObjectParams};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Object {
     session_id: i32,
     class_id: i32,
@@ -12,8 +12,7 @@ pub struct Object {
     velocity: Velocity,
     rotation_speed: f32,
     acceleration: f32,
-    rotation_acceleration: f32,
-    state: State,
+    rotation_acceleration: f32
 }
 
 impl Object {
@@ -27,8 +26,7 @@ impl Object {
             acceleration: 0f32,
             angle,
             rotation_speed: 0f32,
-            rotation_acceleration: 0f32,
-            state: State::Added,
+            rotation_acceleration: 0f32
         }
     }
 
@@ -93,10 +91,6 @@ impl Object {
         self.rotation_acceleration
     }
 
-    pub fn get_state(&self) -> State {
-        self.state
-    }
-
     pub fn update(&mut self, time: Duration, position: Point, angle: f32) {
         let delta_time = (time - self.time).as_secs_f32();
 
@@ -123,14 +117,6 @@ impl Object {
         self.rotation_speed = rotation_speed;
 
         self.time = time;
-
-        self.state = if self.acceleration > 0f32 {
-            State::Accelerating
-        } else if self.acceleration < 0f32 {
-            State::Decelerating
-        } else {
-            State::Stopped
-        };
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -192,8 +178,7 @@ impl From<(Duration, ObjectParams)> for Object {
             velocity: Velocity{x: params.x_vel, y: params.y_vel},
             rotation_speed: params.rotation_speed,
             acceleration: params.acceleration,
-            rotation_acceleration: params.rotation_acceleration,
-            state: State::Added,
+            rotation_acceleration: params.rotation_acceleration
         }
     }
 }
