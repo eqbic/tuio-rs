@@ -7,7 +7,7 @@ pub struct Object {
     session_id: i32,
     class_id: i32,
     time: Duration,
-    path: Vec<Point>,
+    position: Point,
     angle: f32,
     velocity: Velocity,
     rotation_speed: f32,
@@ -17,12 +17,12 @@ pub struct Object {
 }
 
 impl Object {
-    pub fn new(time: Duration, session_id: i32, class_id: i32, point: Point, angle: f32) -> Self {
+    pub fn new(time: Duration, session_id: i32, class_id: i32, position: Point, angle: f32) -> Self {
         Self {
             session_id,
             class_id,
             time,
-            path: Vec::from([point]),
+            position,
             velocity: Velocity::default(),
             acceleration: 0f32,
             angle,
@@ -59,11 +59,11 @@ impl Object {
     }
 
     pub fn get_x_position(&self) -> f32 {
-        self.path.last().unwrap().x
+        self.position.x
     }
 
     pub fn get_y_position(&self) -> f32 {
-        self.path.last().unwrap().y
+        self.position.y
     }
 
     pub fn get_x_velocity(&self) -> f32 {
@@ -99,11 +99,10 @@ impl Object {
 
     pub fn update(&mut self, time: Duration, position: Point, angle: f32) {
         let delta_time = (time - self.time).as_secs_f32();
-        let last_position = self.path.last().unwrap();
 
-        let distance = position.distance_from(last_position);
-        let delta_x = position.x - last_position.x;
-        let delta_y = position.y - last_position.y;
+        let distance = position.distance_from(&self.position);
+        let delta_x = position.x - self.position.x;
+        let delta_y = position.y - self.position.y;
 
         let last_speed = self.velocity.get_speed();
         let speed = distance / delta_time;
@@ -114,7 +113,7 @@ impl Object {
         };
         
         self.acceleration = (speed - last_speed) / delta_time;
-        self.path.push(position);
+        self.position = position;
 
         
         let delta_turn = (angle - self.angle) / (2. * PI);
@@ -148,7 +147,7 @@ impl Object {
     ) {
         self.time = time;
         self.class_id = class_id;
-        self.path.push(position);
+        self.position = position;
         self.angle = angle;
         self.velocity = velocity;
         self.rotation_speed = rotation_speed;
@@ -159,7 +158,7 @@ impl Object {
     pub fn update_from_params(&mut self, time: Duration, params: ObjectParams) {
         self.time = time;
         self.class_id = params.class_id;
-        self.path.push(Point{x: params.x_pos, y: params.y_pos});
+        self.position = Point{x: params.x_pos, y: params.y_pos};
         self.angle = params.angle;
         self.velocity = Velocity{x: params.x_vel, y: params.y_vel};
         self.rotation_speed = params.rotation_speed;
@@ -188,7 +187,7 @@ impl From<(Duration, ObjectParams)> for Object {
             session_id: params.session_id,
             class_id: params.class_id,
             time,
-            path: vec![Point{x: params.x_pos, y: params.y_pos}],
+            position: Point{x: params.x_pos, y: params.y_pos},
             angle: params.angle,
             velocity: Velocity{x: params.x_vel, y: params.y_vel},
             rotation_speed: params.rotation_speed,

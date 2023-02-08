@@ -9,7 +9,7 @@ use crate::{
 pub struct Blob {
     session_id: i32,
     time: Duration,
-    path: Vec<Point>,
+    position: Point,
     velocity: Velocity,
     acceleration: f32,
     angle: f32,
@@ -25,7 +25,7 @@ impl Blob {
     pub fn new(
         time: Duration,
         session_id: i32,
-        point: Point,
+        position: Point,
         angle: f32,
         width: f32,
         height: f32,
@@ -34,7 +34,7 @@ impl Blob {
         Self {
             session_id,
             time,
-            path: Vec::from([point]),
+            position,
             velocity: Velocity::default(),
             acceleration: 0f32,
             angle,
@@ -75,11 +75,10 @@ impl Blob {
         area: f32,
     ) {
         let delta_time = (time - self.time).as_secs_f32();
-        let last_position = self.path.last().unwrap();
 
-        let distance = position.distance_from(last_position);
-        let delta_x = position.x - last_position.x;
-        let delta_y = position.y - last_position.y;
+        let distance = position.distance_from(&self.position);
+        let delta_x = position.x - self.position.x;
+        let delta_y = position.y - self.position.y;
 
         let last_speed = self.velocity.get_speed();
         let speed = distance / delta_time;
@@ -90,7 +89,7 @@ impl Blob {
         };
         
         self.acceleration = (speed - last_speed) / delta_time;
-        self.path.push(position);
+        self.position = position;
 
         let delta_turn = (angle - self.angle) / (2. * PI);
         let rotation_speed = delta_turn / delta_time;
@@ -128,7 +127,7 @@ impl Blob {
         rotation_acceleration: f32,
     ) {
         self.time = time;
-        self.path.push(position);
+        self.position = position;
         self.angle = angle;
         self.width = width;
         self.height = height;
@@ -165,11 +164,11 @@ impl Blob {
     }
 
     pub fn get_x_position(&self) -> f32 {
-        self.path.last().unwrap().x
+        self.position.x
     }
 
     pub fn get_y_position(&self) -> f32 {
-        self.path.last().unwrap().y
+        self.position.y
     }
 
     pub fn get_x_velocity(&self) -> f32 {
@@ -249,10 +248,10 @@ impl From<(Duration, BlobParams)> for Blob {
     fn from((time, params): (Duration, BlobParams)) -> Self {
         Self {
             session_id: params.session_id,
-            path: vec![Point {
+            position: Point {
                 x: params.x_pos,
                 y: params.y_pos,
-            }],
+            },
             angle: params.angle,
             width: params.width,
             height: params.height,
