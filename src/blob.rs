@@ -1,7 +1,7 @@
 use std::{time::Duration, f32::consts::PI};
 
 use crate::{
-    cursor::{Point, Velocity},
+    cursor::{Position, Velocity},
     osc_encode_decode::BlobParams,
 };
 
@@ -9,7 +9,7 @@ use crate::{
 pub struct Blob {
     session_id: i32,
     time: Duration,
-    position: Point,
+    position: Position,
     velocity: Velocity,
     acceleration: f32,
     angle: f32,
@@ -24,7 +24,7 @@ impl Blob {
     pub fn new(
         time: Duration,
         session_id: i32,
-        position: Point,
+        position: Position,
         angle: f32,
         width: f32,
         height: f32,
@@ -66,7 +66,7 @@ impl Blob {
     pub fn update(
         &mut self,
         time: Duration,
-        position: Point,
+        position: Position,
         angle: f32,
         width: f32,
         height: f32,
@@ -106,7 +106,7 @@ impl Blob {
     pub fn update_values(
         &mut self,
         time: Duration,
-        position: Point,
+        position: Position,
         angle: f32,
         width: f32,
         height: f32,
@@ -131,7 +131,7 @@ impl Blob {
     pub fn update_from_params(&mut self, time: Duration, params: BlobParams) {
         self.update_values(
             time,
-            Point {
+            Position {
                 x: params.x_pos,
                 y: params.y_pos,
             },
@@ -234,7 +234,7 @@ impl From<(Duration, BlobParams)> for Blob {
     fn from((time, params): (Duration, BlobParams)) -> Self {
         Self {
             session_id: params.session_id,
-            position: Point {
+            position: Position {
                 x: params.x_pos,
                 y: params.y_pos,
             },
@@ -264,14 +264,14 @@ impl From<BlobParams> for Blob {
 mod tests {
     use std::{f32::consts::SQRT_2, time::Duration};
 
-    use crate::{blob::Blob, cursor::Point};
+    use crate::{blob::Blob, cursor::Position};
 
     #[test]
     fn blob_update() {
         let mut blob = Blob::new(
             Duration::default(),
             0,
-            Point { x: 0., y: 0. },
+            Position { x: 0., y: 0. },
             0.,
             0.,
             0.,
@@ -280,7 +280,7 @@ mod tests {
 
         blob.update(
             Duration::from_secs(1),
-            Point { x: 1., y: 1. },
+            Position { x: 1., y: 1. },
             90f32.to_radians(),
             0.5,
             0.5,

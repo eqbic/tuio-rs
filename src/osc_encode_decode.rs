@@ -449,7 +449,7 @@ impl DecodeOsc<OscBundle> for RoscDecoder {
 mod tests {
     use std::time::Duration;
 
-    use crate::{cursor::{Cursor, Point}, object::Object, blob::Blob, osc_encode_decode::{RoscEncoder, EncodeOsc, self}};
+    use crate::{cursor::{Cursor, Position}, object::Object, blob::Blob, osc_encode_decode::{RoscEncoder, EncodeOsc, self}};
 
     use super::*;
 
@@ -458,9 +458,9 @@ mod tests {
         let frame_time = Duration::default();
         let source = "test".to_string();
 
-        let cursors = vec![Cursor::new(frame_time, 0, Point {x: 0., y: 0.}), Cursor::new(Duration::from_secs(0), 1, Point {x: 0.5, y: 0.5})];
-        let objects = vec![Object::new(frame_time, 0, 0, Point {x: 0., y: 0.}, 0.), Object::new(Duration::from_secs(0), 1, 1, Point {x: 0.5, y: 0.5}, 0.)];
-        let blobs = vec![Blob::new(frame_time, 0, Point {x: 0., y: 0.}, 0., 0.3, 0.3, 0.09), Blob::new(Duration::from_secs(0), 1, Point {x: 0.5, y: 0.5}, 0., 0.5, 0.5, 0.25)];
+        let cursors = vec![Cursor::new(frame_time, 0, Position {x: 0., y: 0.}), Cursor::new(Duration::from_secs(0), 1, Position {x: 0.5, y: 0.5})];
+        let objects = vec![Object::new(frame_time, 0, 0, Position {x: 0., y: 0.}, 0.), Object::new(Duration::from_secs(0), 1, 1, Position {x: 0.5, y: 0.5}, 0.)];
+        let blobs = vec![Blob::new(frame_time, 0, Position {x: 0., y: 0.}, 0., 0.3, 0.3, 0.09), Blob::new(Duration::from_secs(0), 1, Position {x: 0.5, y: 0.5}, 0., 0.5, 0.5, 0.25)];
 
         let cursor_bundle = RoscEncoder::encode_cursor_bundle(&cursors, source.clone(), frame_time, 0, &osc_encode_decode::EncodingBehaviour::CurrentFrame);
         let object_bundle = RoscEncoder::encode_object_bundle(&objects, source.clone(), frame_time, 0, &osc_encode_decode::EncodingBehaviour::CurrentFrame);

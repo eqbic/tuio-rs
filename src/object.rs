@@ -1,13 +1,13 @@
 use std::{time::Duration, f32::consts::PI};
 
-use crate::{cursor::{Point, Velocity}, osc_encode_decode::ObjectParams};
+use crate::{cursor::{Position, Velocity}, osc_encode_decode::ObjectParams};
 
 #[derive(Debug, Clone)]
 pub struct Object {
     session_id: i32,
     class_id: i32,
     time: Duration,
-    position: Point,
+    position: Position,
     angle: f32,
     velocity: Velocity,
     rotation_speed: f32,
@@ -16,7 +16,7 @@ pub struct Object {
 }
 
 impl Object {
-    pub fn new(time: Duration, session_id: i32, class_id: i32, position: Point, angle: f32) -> Self {
+    pub fn new(time: Duration, session_id: i32, class_id: i32, position: Position, angle: f32) -> Self {
         Self {
             session_id,
             class_id,
@@ -91,7 +91,7 @@ impl Object {
         self.rotation_acceleration
     }
 
-    pub fn update(&mut self, time: Duration, position: Point, angle: f32) {
+    pub fn update(&mut self, time: Duration, position: Position, angle: f32) {
         let delta_time = (time - self.time).as_secs_f32();
 
         let distance = position.distance_from(&self.position);
@@ -124,7 +124,7 @@ impl Object {
         &mut self,
         time: Duration,
         class_id: i32,
-        position: Point,
+        position: Position,
         angle: f32,
         velocity: Velocity,
         rotation_speed: f32,
@@ -144,7 +144,7 @@ impl Object {
     pub fn update_from_params(&mut self, time: Duration, params: ObjectParams) {
         self.time = time;
         self.class_id = params.class_id;
-        self.position = Point{x: params.x_pos, y: params.y_pos};
+        self.position = Position{x: params.x_pos, y: params.y_pos};
         self.angle = params.angle;
         self.velocity = Velocity{x: params.x_vel, y: params.y_vel};
         self.rotation_speed = params.rotation_speed;
@@ -173,7 +173,7 @@ impl From<(Duration, ObjectParams)> for Object {
             session_id: params.session_id,
             class_id: params.class_id,
             time,
-            position: Point{x: params.x_pos, y: params.y_pos},
+            position: Position{x: params.x_pos, y: params.y_pos},
             angle: params.angle,
             velocity: Velocity{x: params.x_vel, y: params.y_vel},
             rotation_speed: params.rotation_speed,
@@ -193,15 +193,15 @@ impl From<ObjectParams> for Object {
 mod tests {
     use std::{time::Duration, f32::consts::SQRT_2};
 
-    use crate::{cursor::Point, object::Object};
+    use crate::{cursor::Position, object::Object};
 
     #[test]
     fn object_update() {
-        let mut object = Object::new(Duration::default(), 0, 0, Point { x: 0., y: 0. }, 0.);
+        let mut object = Object::new(Duration::default(), 0, 0, Position { x: 0., y: 0. }, 0.);
 
         object.update(
             Duration::from_secs(1),
-            Point { x: 1., y: 1. },
+            Position { x: 1., y: 1. },
             90f32.to_radians(),
         );
 

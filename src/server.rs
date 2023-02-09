@@ -5,7 +5,7 @@ use rosc::OscType;
 use local_ip_address::local_ip;
 use indexmap::{IndexMap};
 
-use crate::{cursor::{Cursor, Point}, object::Object, blob::Blob, osc_encode_decode::{EncodeOsc, RoscEncoder, EncodingBehaviour}}; 
+use crate::{cursor::{Cursor, Position}, object::Object, blob::Blob, osc_encode_decode::{EncodeOsc, RoscEncoder, EncodingBehaviour}}; 
 
 /// Base trait to implement sending OSC over various transport methods
 pub trait OscSender<P, E> where E: Error {
@@ -202,7 +202,7 @@ impl Server {
     pub fn create_object(&mut self, class_id: i32, x: f32, y: f32, angle: f32) -> i32 {
         let session_id = self.get_session_id();
         
-        let object = Object::new(self.current_frame_time, session_id, class_id, Point{x, y}, angle);
+        let object = Object::new(self.current_frame_time, session_id, class_id, Position{x, y}, angle);
         self.object_map.insert(session_id, object);
         self.object_updated = true;
         session_id
@@ -217,7 +217,7 @@ impl Server {
     /// * `angle` - the new object's angle
     pub fn update_object(&mut self, session_id: i32, x: f32, y: f32, angle: f32) {
         if let Some(object) = self.object_map.get_mut(&session_id) {
-            object.update(self.current_frame_time, Point{x, y}, angle);
+            object.update(self.current_frame_time, Position{x, y}, angle);
             self.object_updated = true;
         }
     }
@@ -240,7 +240,7 @@ impl Server {
     pub fn create_cursor(&mut self, x: f32, y: f32) -> i32 {
         let session_id = self.get_session_id();
         
-        let cursor = Cursor::new(self.current_frame_time, session_id, Point{x, y});
+        let cursor = Cursor::new(self.current_frame_time, session_id, Position{x, y});
         self.cursor_map.insert(session_id, cursor);
         self.cursor_updated = true;
         session_id
@@ -254,7 +254,7 @@ impl Server {
     /// * `y` - the new cursor's y position
     pub fn update_cursor(&mut self, session_id: i32, x: f32, y: f32) {
         if let Some(cursor) = self.cursor_map.get_mut(&session_id) {
-            cursor.update(self.current_frame_time, Point{x, y});
+            cursor.update(self.current_frame_time, Position{x, y});
             self.cursor_updated = true;
         }
     }
@@ -281,7 +281,7 @@ impl Server {
     pub fn create_blob(&mut self, x: f32, y: f32, angle: f32, width: f32, height: f32, area: f32) -> i32 {
         let session_id = self.get_session_id();
         
-        let blob = Blob::new(self.current_frame_time, session_id, Point{x, y}, angle, width, height, area);
+        let blob = Blob::new(self.current_frame_time, session_id, Position{x, y}, angle, width, height, area);
         self.blob_map.insert(session_id, blob);
         self.blob_updated = true;
         session_id
@@ -300,7 +300,7 @@ impl Server {
     /// * `area` - the new blob's area
     pub fn update_blob(&mut self, session_id: i32, x: f32, y: f32, angle: f32, width: f32, height: f32, area: f32) {
         if let Some(blob) = self.blob_map.get_mut(&session_id) {
-            blob.update(self.current_frame_time, Point{x, y}, angle, width, height, area);
+            blob.update(self.current_frame_time, Position{x, y}, angle, width, height, area);
             self.blob_updated = true;
         }
     }
