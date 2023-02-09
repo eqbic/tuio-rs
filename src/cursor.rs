@@ -39,7 +39,12 @@ pub struct Cursor {
 }
 
 impl Cursor {
-    pub fn new(time: Duration, session_id: i32 /*, source: Source*/, position: Position) -> Self {
+    /// Creates a new [Cursor]
+    /// # Arguments
+    /// * `time` - the time of creation
+    /// * `session_id` - a unique session ID
+    /// * `position` - a normalized [Position]
+    pub fn new(time: Duration, session_id: i32, position: Position) -> Self {
         Self {
             session_id,
             position,
@@ -49,7 +54,11 @@ impl Cursor {
         }
     }
 
-    pub fn with_movement(mut self, velocity: Velocity, acceleration: f32) -> Self {
+    /// Returns this [Cursor] with motion
+    /// # Arguments
+    /// * `velocity` - a normalized [Velocity]
+    /// * `acceleration` - a normalized acceleration
+    pub fn with_motion(mut self, velocity: Velocity, acceleration: f32) -> Self {
         self.velocity = velocity;
         self.acceleration = acceleration;
         self
@@ -63,12 +72,20 @@ impl Cursor {
         self.time
     }
 
+    pub fn get_position(&self) -> &Position {
+        &self.position
+    }
+
     pub fn get_x_position(&self) -> f32 {
         self.position.x
     }
 
     pub fn get_y_position(&self) -> f32 {
         self.position.y
+    }
+
+    pub fn get_velocity(&self) -> &Velocity {
+        &self.velocity
     }
 
     pub fn get_x_velocity(&self) -> f32 {
@@ -116,10 +133,7 @@ impl Cursor {
     }
 
     pub fn update_from_params(&mut self, time: Duration, params: CursorParams) {
-        self.time = time;
-        self.position = Position{x: params.x_pos, y: params.y_pos};
-        self.velocity = Velocity{x: params.x_vel, y: params.y_vel};
-        self.acceleration = params.acceleration;
+        self.update_values(time, Position{x: params.x_pos, y: params.y_pos}, Velocity{x: params.x_vel, y: params.y_vel}, params.acceleration);
     }
 }
 

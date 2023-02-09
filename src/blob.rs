@@ -21,6 +21,15 @@ pub struct Blob {
 }
 
 impl Blob {
+    /// Creates a new [Blob]
+    /// # Arguments
+    /// * `time` - the time of creation
+    /// * `session_id` - a unique session ID
+    /// * `position` - a normalized [Position]
+    /// * `angle` - an angle in radians
+    /// * `width` - a normalized width
+    /// * `height` - a normalized height
+    /// * `area` - a normalized area
     pub fn new(
         time: Duration,
         session_id: i32,
@@ -45,7 +54,13 @@ impl Blob {
         }
     }
 
-    pub fn with_movement(
+    /// Returns this [Blob] with motion
+    /// # Arguments
+    /// * `velocity` - a normalized [Velocity]
+    /// * `rotation_speed` - a rotation speed in turns per second
+    /// * `acceleration` - a normalized acceleration
+    /// * `rotation_acceleration` - a roation acceleration in radians turn per second squared
+    pub fn with_motion(
         mut self,
         velocity: Velocity,
         rotation_speed: f32,
@@ -153,12 +168,20 @@ impl Blob {
         self.session_id
     }
 
+    pub fn get_position(&self) -> &Position {
+        &self.position
+    }
+
     pub fn get_x_position(&self) -> f32 {
         self.position.x
     }
 
     pub fn get_y_position(&self) -> f32 {
         self.position.y
+    }
+
+    pub fn get_velocity(&self) -> &Velocity {
+        &self.velocity
     }
 
     pub fn get_x_velocity(&self) -> f32 {

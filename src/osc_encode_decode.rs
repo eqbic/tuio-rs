@@ -226,7 +226,7 @@ impl EncodeOsc<OscBundle> for RoscEncoder {
     }
 }
 
-
+/// A struct containg all parameters of a TUIO Object
 pub struct ObjectParams {
     pub session_id: i32,
     pub class_id: i32,
@@ -240,6 +240,7 @@ pub struct ObjectParams {
     pub rotation_acceleration: f32
 }
 
+/// A struct containg all parameters of a TUIO Cursor
 pub struct CursorParams {
     pub session_id: i32,
     pub x_pos: f32,
@@ -249,6 +250,7 @@ pub struct CursorParams {
     pub acceleration: f32
 }
 
+/// A struct containg all parameters of a TUIO Blob
 pub struct BlobParams {
     pub session_id: i32,
     pub x_pos: f32,
