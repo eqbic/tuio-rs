@@ -1,6 +1,6 @@
-use std::fmt;
+use std::{fmt, io, error};
 
-use rosc::{OscMessage, OscBundle, OscPacket};
+use rosc::{OscMessage, OscBundle, OscPacket, OscError};
 
 #[derive(Debug)]
 pub enum TuioError {
@@ -25,6 +25,36 @@ impl fmt::Display for TuioError {
             TuioError::WrongArgumentType(msg, index) => write!(f, "wrong argument type at index {} in: {:?}", index, msg),
             TuioError::IncompleteBundle(bundle) => write!(f, "missing one or more mandatory messages in: {:?}", bundle),
             TuioError::NotABundle(packet) => write!(f, "OSC packet is not a bundle: {:?}", packet),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum OscReceiverError {
+    Connect(io::Error),
+    AlreadyConnected(),
+    Receive(io::Error),
+    Decode(OscError),
+}
+
+impl fmt::Display for OscReceiverError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            OscReceiverError::AlreadyConnected() => write!(f, "OscReceiver is already connected"),
+            OscReceiverError::Connect(msg) => write!(f, "error connecting OscReceiver: {}", msg),
+            OscReceiverError::Receive(msg) => write!(f, "error receiving OSC packet: {}", msg),
+            OscReceiverError::Decode(msg) => write!(f, "error decoding OSC packet: {}", msg),
+        }
+    }
+}
+
+impl error::Error for OscReceiverError {
+    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
+        match self {
+            OscReceiverError::AlreadyConnected() => None,
+            OscReceiverError::Connect(err) => Some(err),
+            OscReceiverError::Receive(err) => Some(err),
+            OscReceiverError::Decode(err) => Some(err)
         }
     }
 }

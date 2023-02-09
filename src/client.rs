@@ -1,9 +1,35 @@
-use std::{time::{Instant, Duration}, sync::{atomic::{Ordering, AtomicI32}}, collections::HashSet};
+use std::{time::{Instant, Duration}, sync::{RwLock, Arc, Mutex}, collections::HashSet, cell::{RefCell, Cell}, thread};
 
 use indexmap::IndexMap;
+use ringbuffer::{ConstGenericRingBuffer, RingBufferWrite, RingBufferRead};
 use rosc::{OscPacket};
 
-use crate::{cursor::{Cursor}, object::Object, blob::Blob, errors::TuioError, listener::{Listener}, dispatcher::{Dispatch, Dispatcher}, osc_encode_decode::{RoscDecoder, DecodeOsc, self, SetParams}, osc_receiver::{OscReceiver, UdpReceiver}};
+use crate::{osc_receiver::{UdpReceiver, RoscReceiver}, cursor::{Cursor}, object::Object, blob::Blob, errors::{TuioError, OscReceiverError}, osc_encode_decode::{RoscDecoder, DecodeOsc, self, SetParams}};
+
+#[derive(Default)]
+pub struct TuioEvents {
+    pub cursor_events: Vec<CursorEvent>,
+    pub object_events: Vec<ObjectEvent>,
+    pub blob_events: Vec<BlobEvent>,
+}
+
+pub enum CursorEvent {
+    New(Cursor),
+    Update(Cursor),
+    Remove(Cursor),
+}
+
+pub enum ObjectEvent {
+    New(Object),
+    Update(Object),
+    Remove(Object),
+}
+
+pub enum BlobEvent {
+    New(Blob),
+    Update(Blob),
+    Remove(Blob),
+}
 
 #[derive(Default)]
 pub struct SourceCollection {
@@ -13,13 +39,14 @@ pub struct SourceCollection {
 }
 
 pub struct Client {
-    current_frame: AtomicI32,
+    current_frame: Cell<i32>,
     instant: Instant,
-    current_time: Duration,
-    pub source_list: IndexMap<String, SourceCollection>,
-    osc_receivers: Vec<Box<dyn OscReceiver>>,
-    dispatcher: Dispatcher,
-    local_receiver: bool
+    current_time: Cell<Duration>,
+    pub source_list: RefCell<IndexMap<String, SourceCollection>>,
+    osc_receivers: Vec<Arc<RoscReceiver>>,
+    packet_buffer: Arc<Mutex<ConstGenericRingBuffer<OscPacket, 128>>>,
+    local_receiver: bool,
+    listen: Arc<RwLock<bool>>
 }
 
 /// Keeps the entries whose keys are contained in a [HashSet]
@@ -29,18 +56,21 @@ pub struct Client {
 /// # Arguments
 /// * `index_map` - an [IndexMap<i32, T>] to filter
 /// * `to_keep` - an [HashSet<i32>] containing the keys to retain
-fn retain_by_ids<T>(index_map: &mut IndexMap<i32, T>, to_keep: HashSet<i32>) -> Vec<i32> {
-    let mut removed_ids = Vec::with_capacity(index_map.len());
+fn retain_by_ids<T>(index_map: &mut IndexMap<i32, T>, to_keep: HashSet<i32>) -> Vec<T> {
+    let mut removed: Vec<T> = Vec::with_capacity(index_map.len());
+    let mut to_remove: Vec<i32> = Vec::with_capacity(index_map.len());
 
-    index_map.retain(|key, _| {
-        let keep = to_keep.contains(key);
-        if !keep {
-            removed_ids.push(*key);
+    for id in index_map.keys() {
+        if !to_keep.contains(id) {
+            to_remove.push(*id);
         }
-        keep
-    });
+    }
 
-    removed_ids
+    for id in to_remove {
+        removed.push(index_map.remove(&id).unwrap());
+    }
+
+    removed
 }
 
 impl Client {
@@ -51,19 +81,54 @@ impl Client {
     pub fn from_port(port: u16) -> Result<Self, std::io::Error> {
         Ok(Self {
             instant: Instant::now(),
-            osc_receivers: vec![Box::new(UdpReceiver::from_port(port)?)],
+            osc_receivers: vec![Arc::new(UdpReceiver::from_port(port)?)],
             current_frame: (-1).into(),
-            current_time: Duration::default(),
-            source_list: IndexMap::new(),
+            current_time: Cell::new(Duration::default()),
+            source_list: RefCell::new(IndexMap::new()),
             local_receiver: true,
-            dispatcher: Dispatcher::new(),
+            listen: Arc::new(RwLock::new(false)),
+            packet_buffer: Default::default()
         })
     }
 
-    pub fn connect(&self) {
-        for receiver in &self.osc_receivers {
-            receiver.connect();
+    pub fn connect(&self) -> Result<(), OscReceiverError> {
+        if *self.listen.read().unwrap() {
+            return Err(OscReceiverError::AlreadyConnected());
         }
+
+        *self.listen.write().unwrap() = true;
+
+        for receiver in &self.osc_receivers {
+            receiver.connect().map_err(OscReceiverError::Connect)?;
+
+            let listen = Arc::clone(&self.listen);
+            let receiver = Arc::clone(receiver);
+            let buffer = Arc::clone(&self.packet_buffer);
+
+            thread::spawn(move || loop {
+                if !*listen.read().unwrap() {
+                    break;
+                }
+                
+                match receiver.recv() {
+                    Ok(packet) => {
+                        buffer.lock().unwrap().push(packet);
+                    }
+                    Err(err) => {
+                        match err {
+                            OscReceiverError::Receive(err) => if err.raw_os_error().unwrap() != 10004 {
+                                println!("Error receiving from socket: {}", err);
+                            },
+                            _ => println!("Error receiving from socket: {}", err)
+                        }
+                        
+                        break;
+                    }
+                }
+            });
+        }
+
+        Ok(())
     }
 
     pub fn disconnect(&self) {
@@ -72,18 +137,25 @@ impl Client {
         }
     }
 
-    pub fn refresh(&mut self) -> Result<(), TuioError>{
-        let packets: Vec<OscPacket> = self.osc_receivers.iter().flat_map(|f| f.receive()).collect();
+    /// Refreshes the client's state
+    /// 
+    /// On success, returns an [Option] containing the evnts of all new, updated and removed TUIO inputs
+    pub fn refresh(&self) -> Result<Option<TuioEvents>, TuioError> {
+        let mut updated = false;
+        let mut events = TuioEvents::default();
 
-        for packet in packets {
-            self.process_osc_packet(packet)?;
+        for packet in self.packet_buffer.lock().unwrap().drain() {
+            if self.process_osc_packet(packet, &mut events)? {
+                updated = true;
+            }
         };
 
-
-        /// Tétais en train de gérer les événements de création ou d'update des éléments TUIO
-
-
-        Ok(())
+        if updated {
+            Ok(Some(events))
+        }
+        else {
+            Ok(None)
+        }
     }
 
     /// Update frame parameters based on a frame number
@@ -91,51 +163,54 @@ impl Client {
     /// Returns true if the frame is a new frame
     /// # Argument
     /// * `frame` - the new frame number
-    fn update_frame(&mut self, frame: i32) -> bool {
+    fn update_frame(&self, frame: i32) -> bool {
         if frame >= 0 {
-            let current_frame = self.current_frame.load(Ordering::SeqCst);
-            println!("current_frame {current_frame}");
+            let current_frame = self.current_frame.get();
+            
             if frame > current_frame {
-                self.current_time = self.instant.elapsed();
+                self.current_time.set(self.instant.elapsed());
             }
             
             if frame >= current_frame || current_frame - frame > 100 {
-                self.current_frame.store(frame, Ordering::SeqCst);
+                self.current_frame.set(frame);
                 return true;
             }
-            else if self.instant.elapsed() - self.current_time > Duration::from_millis(100){
-                self.current_time = self.instant.elapsed();
+            else if self.instant.elapsed() - self.current_time.get() > Duration::from_millis(100){
+                self.current_time.set(self.instant.elapsed());
                 return false;
             }
         }
         false
     }
 
-    fn process_osc_packet(&mut self, packet: OscPacket) -> Result<(), TuioError> {
+    fn process_osc_packet(&self, packet: OscPacket, events: &mut TuioEvents) -> Result<bool, TuioError> {
         if let OscPacket::Bundle(bundle) = packet {
             let decoded_bundle = RoscDecoder::decode_bundle(bundle)?;
             
             let to_keep: HashSet<i32> = HashSet::from_iter(decoded_bundle.alive);
             
             if self.update_frame(decoded_bundle.fseq) {
-                let source_collection = self.source_list.entry(decoded_bundle.source).or_default();
+                let mut source_list = self.source_list.borrow_mut();
+                let source_collection = source_list.entry(decoded_bundle.source).or_default(); 
                 match decoded_bundle.tuio_type {
                     osc_encode_decode::TuioBundleType::Cursor => {
                         let cursor_map = &mut source_collection.cursor_map;
 
-                        self.dispatcher.remove_cursors(&retain_by_ids(cursor_map, to_keep));
+                        for cursor in retain_by_ids(cursor_map, to_keep).into_iter() {
+                            events.cursor_events.push(CursorEvent::Remove(cursor));
+                        }
 
                         if let Some(SetParams::Cursor(params_collection)) = decoded_bundle.set {
                             for params in params_collection {
                                 match cursor_map.entry(params.session_id) {
                                     indexmap::map::Entry::Occupied(mut entry) => {
                                         let cursor = entry.get_mut();
-                                        cursor.update_from_params(self.current_time, params);
-                                        self.dispatcher.update_cursor(cursor);
+                                        cursor.update_from_params(self.current_time.get(), params);
+                                        events.cursor_events.push(CursorEvent::Update(cursor.clone()));
                                     },
                                     indexmap::map::Entry::Vacant(entry) => {
-                                        let cursor = Cursor::from((self.current_time, params));
-                                        self.dispatcher.add_cursor(&cursor);
+                                        let cursor = Cursor::from((self.current_time.get(), params));
+                                        events.cursor_events.push(CursorEvent::New(cursor.clone()));
                                         entry.insert(cursor);
                                     },
                                 }
@@ -145,19 +220,21 @@ impl Client {
                     osc_encode_decode::TuioBundleType::Object => {
                         let object_map = &mut source_collection.object_map;
 
-                        self.dispatcher.remove_objects(&retain_by_ids(object_map, to_keep));
+                        for object in retain_by_ids(object_map, to_keep).into_iter() {
+                            events.object_events.push(ObjectEvent::Remove(object));
+                        }
 
                         if let Some(SetParams::Object(params_collection)) = decoded_bundle.set {
                             for params in params_collection {
                                 match object_map.entry(params.session_id) {
                                     indexmap::map::Entry::Occupied(mut entry) => {
                                         let object = entry.get_mut();
-                                        object.update_from_params(self.current_time, params);
-                                        self.dispatcher.update_object(object);
+                                        object.update_from_params(self.current_time.get(), params);
+                                        events.object_events.push(ObjectEvent::Update(object.clone()));
                                     },
                                     indexmap::map::Entry::Vacant(entry) => {
-                                        let object = Object::from((self.current_time, params));
-                                        self.dispatcher.add_object(&object);
+                                        let object = Object::from((self.current_time.get(), params));
+                                        events.object_events.push(ObjectEvent::New(object.clone()));
                                         entry.insert(object);
                                     },
                                 }
@@ -167,19 +244,21 @@ impl Client {
                     osc_encode_decode::TuioBundleType::Blob => {
                         let blob_map = &mut source_collection.blob_map;
 
-                        self.dispatcher.remove_blobs(&retain_by_ids(blob_map, to_keep));
+                        for blob in retain_by_ids(blob_map, to_keep).into_iter() {
+                            events.blob_events.push(BlobEvent::Remove(blob));
+                        }
 
                         if let Some(SetParams::Blob(params_collection)) = decoded_bundle.set {
                             for params in params_collection {
                                 match blob_map.entry(params.session_id) {
                                     indexmap::map::Entry::Occupied(mut entry) => {
                                         let blob = entry.get_mut();
-                                        blob.update_from_params(self.current_time, params);
-                                        self.dispatcher.update_blob(blob);
+                                        blob.update_from_params(self.current_time.get(), params);
+                                        events.blob_events.push(BlobEvent::Update(blob.clone()));
                                     },
                                     indexmap::map::Entry::Vacant(entry) => {
-                                        let blob = Blob::from((self.current_time, params));
-                                        self.dispatcher.add_blob(&blob);
+                                        let blob = Blob::from((self.current_time.get(), params));
+                                        events.blob_events.push(BlobEvent::New(blob.clone()));
                                         entry.insert(blob);
                                     },
                                 }
@@ -188,24 +267,15 @@ impl Client {
                     },
                     osc_encode_decode::TuioBundleType::Unknown => (),
                 }
+                Ok(true)
             }
-            Ok(())
+            else {
+                Ok(false)
+            }
         }
         else {
             Err(TuioError::NotABundle(packet))
         }
-    }
-
-    pub fn add_listener<L: Listener + 'static>(&mut self, listener: L) {
-        self.dispatcher.add_listener(listener);
-    }
-    
-    pub fn remove_listener<L: Listener + 'static>(&mut self, listener: L) {
-        self.dispatcher.remove_listener(listener);
-    }
-    
-    pub fn remove_all_listeners(&mut self) {
-        self.dispatcher.remove_all_listeners();
     }
 
     pub fn local_receiver(&self) -> bool {
