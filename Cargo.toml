@@ -2,7 +2,13 @@
 name = "tuio-rs"
 version = "0.1.0"
 edition = "2021"
-
+description = "A TUIO 1.1 implementation in Rust"
+readme = "README.md"
+homepage = "https://github.com/LTBL-Studio/tuio-rs"
+repository = "https://github.com/LTBL-Studio/tuio-rs"
+license-file = "LICENSE"
+keywords = ["tuio", "osc"]
+categories = ["network-programming"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
