@@ -63,9 +63,6 @@ impl OscSender<OscPacket, OscError> for UdpSender {
 }
 
 /// TUIO Server which keeps track of all TUIO elements and which send TUIO messages over the network
-///- [x] Cursor messaging
-///- [ ] Object messaging
-///- [ ] Blob messaging
 pub struct Server {
     sender_list: Vec<Box<dyn OscSender<OscPacket, OscError>>>,
     source_name: String,
