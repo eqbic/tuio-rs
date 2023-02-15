@@ -32,7 +32,7 @@ fn main() {
     let client = Client::new().unwrap();
     client.connect().expect("Client connecting failed");
 
-    let mut server = Server::new().unwrap();
+    let mut server = Server::new("server_name").unwrap();
     
     server.init_frame();
     let cursor_id = server.create_cursor(0., 0.);

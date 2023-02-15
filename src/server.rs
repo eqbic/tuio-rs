@@ -96,9 +96,11 @@ impl Server {
     /// Creates a TUIO [Server] with a default [UdpSender] configured for 127.0.0.1:3333
     ///
     /// # Arguments
-    /// * `packet` - a reference to an [OscPacket]
-    pub fn new() -> Result<Self, std::io::Error> {
-        Self::from_socket_addr(SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 3333))
+    /// * `source_name` - the source name
+    pub fn new(source_name: &str) -> Result<Self, std::io::Error> {
+        let mut server = Self::from_socket_addr(SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 3333))?;
+        server.set_source_name(source_name);
+        Ok(server)
     }
     
     /// Creates a TUIO [Server] with a [UdpSender] configured from a provided socket address
@@ -155,7 +157,7 @@ impl Server {
     ///
     /// # Arguments
     /// * `name` - the name of the source
-    pub fn set_source_name(&mut self, name: String) {
+    pub fn set_source_name(&mut self, name: &str) {
         let source = if self.sender_list[0].is_local() {String::from("local")} else {
             match local_ip() {
                 Ok(ip) => ip.to_string(),
