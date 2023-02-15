@@ -1,4 +1,4 @@
-use std::{net::{SocketAddr, UdpSocket, Ipv4Addr, Ipv6Addr, IpAddr}, sync::atomic::{AtomicI32, Ordering}, time::{SystemTime, Instant, Duration}, error::Error};
+use std::{net::{SocketAddr, UdpSocket, Ipv4Addr, Ipv6Addr, IpAddr}, sync::atomic::{AtomicI32, Ordering}, time::{SystemTime, Instant, Duration}, error::Error, num::Wrapping};
 use rosc::{OscPacket, OscMessage, OscBundle, OscTime, OscError};
 use rosc::encoder;
 use rosc::OscType;
@@ -186,7 +186,7 @@ impl Server {
     }
 
     fn get_session_id(&mut self) -> i32 {
-        self.session_id += 1;
+        self.session_id = (Wrapping(self.session_id) + Wrapping(1)).0;
         self.session_id
     }
 
@@ -478,5 +478,17 @@ impl Drop for Server {
         });
 
         self.deliver_osc_packet(packet);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn id_wrapping() {
+        let mut server = Server::new("source_name").unwrap();
+        server.session_id = i32::MAX;
+        assert_eq!(server.get_session_id(), i32::MIN);
     }
 }
