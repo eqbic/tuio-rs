@@ -13,22 +13,37 @@ pub struct TuioEvents {
     pub blob_events: Vec<BlobEvent>,
 }
 
+pub struct CursorData {
+    pub source_name: String,
+    pub cursor: Cursor
+}
+
+pub struct ObjectData {
+    pub source_name: String,
+    pub object: Object
+}
+
+pub struct BlobData {
+    pub source_name: String,
+    pub blob: Blob
+}
+
 pub enum CursorEvent {
-    New(Cursor),
-    Update(Cursor),
-    Remove(Cursor),
+    New(CursorData),
+    Update(CursorData),
+    Remove(CursorData),
 }
 
 pub enum ObjectEvent {
-    New(Object),
-    Update(Object),
-    Remove(Object),
+    New(ObjectData),
+    Update(ObjectData),
+    Remove(ObjectData),
 }
 
 pub enum BlobEvent {
-    New(Blob),
-    Update(Blob),
-    Remove(Blob),
+    New(BlobData),
+    Update(BlobData),
+    Remove(BlobData),
 }
 
 #[derive(Default)]
@@ -191,24 +206,24 @@ impl Client {
             
             if self.update_frame(decoded_bundle.fseq) {
                 let mut source_list = self.source_list.borrow_mut();
-                let source_collection = source_list.entry(decoded_bundle.source).or_default(); 
+                let source_collection = source_list.entry(decoded_bundle.source.clone()).or_default(); 
                 match decoded_bundle.tuio_type {
                     osc_encode_decode::TuioBundleType::Cursor => {
                         let cursor_map = &mut source_collection.cursor_map;
 
                         for cursor in retain_by_ids(cursor_map, to_keep).into_iter() {
-                            events.cursor_events.push(CursorEvent::Remove(cursor));
+                            events.cursor_events.push(CursorEvent::Remove(CursorData{source_name: decoded_bundle.source.clone(), cursor: cursor.clone()}));
                         }
 
                         if let Some(Set::Cursor(cursor_collection)) = decoded_bundle.set {
                             for cursor in cursor_collection {
                                 match cursor_map.entry(cursor.get_session_id()) {
                                     indexmap::map::Entry::Occupied(mut entry) => {
-                                        events.cursor_events.push(CursorEvent::Update(cursor.clone()));
+                                        events.cursor_events.push(CursorEvent::Update(CursorData{source_name: decoded_bundle.source.clone(), cursor: cursor.clone()}));
                                         entry.insert(cursor);
                                     },
                                     indexmap::map::Entry::Vacant(entry) => {
-                                        events.cursor_events.push(CursorEvent::New(cursor.clone()));
+                                        events.cursor_events.push(CursorEvent::New(CursorData{source_name: decoded_bundle.source.clone(), cursor: cursor.clone()}));
                                         entry.insert(cursor);
                                     },
                                 }
@@ -219,18 +234,18 @@ impl Client {
                         let object_map = &mut source_collection.object_map;
 
                         for object in retain_by_ids(object_map, to_keep).into_iter() {
-                            events.object_events.push(ObjectEvent::Remove(object));
+                            events.object_events.push(ObjectEvent::Remove(ObjectData { source_name: decoded_bundle.source.clone(), object: object.clone() }));
                         }
 
                         if let Some(Set::Object(object_collection)) = decoded_bundle.set {
                             for object in object_collection {
                                 match object_map.entry(object.get_session_id()) {
                                     indexmap::map::Entry::Occupied(mut entry) => {
-                                        events.object_events.push(ObjectEvent::Update(object.clone()));
+                                        events.object_events.push(ObjectEvent::Update(ObjectData { source_name: decoded_bundle.source.clone(), object: object.clone() }));
                                         entry.insert(object);
                                     },
                                     indexmap::map::Entry::Vacant(entry) => {
-                                        events.object_events.push(ObjectEvent::New(object.clone()));
+                                        events.object_events.push(ObjectEvent::New(ObjectData { source_name: decoded_bundle.source.clone(), object: object.clone() }));
                                         entry.insert(object);
                                     },
                                 }
@@ -241,18 +256,18 @@ impl Client {
                         let blob_map = &mut source_collection.blob_map;
 
                         for blob in retain_by_ids(blob_map, to_keep).into_iter() {
-                            events.blob_events.push(BlobEvent::Remove(blob));
+                            events.blob_events.push(BlobEvent::Remove(BlobData { source_name: decoded_bundle.source.clone(), blob: blob.clone() }));
                         }
 
                         if let Some(Set::Blob(blob_collection)) = decoded_bundle.set {
                             for blob in blob_collection {
                                 match blob_map.entry(blob.get_session_id()) {
                                     indexmap::map::Entry::Occupied(mut entry) => {
-                                        events.blob_events.push(BlobEvent::Update(blob.clone()));
+                                        events.blob_events.push(BlobEvent::Update(BlobData { source_name: decoded_bundle.source.clone(), blob: blob.clone() }));
                                         entry.insert(blob);
                                     },
                                     indexmap::map::Entry::Vacant(entry) => {
-                                        events.blob_events.push(BlobEvent::New(blob.clone()));
+                                        events.blob_events.push(BlobEvent::New(BlobData { source_name: decoded_bundle.source.clone(), blob: blob.clone() }));
                                         entry.insert(blob);
                                     },
                                 }
