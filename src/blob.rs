@@ -1,29 +1,24 @@
-use std::{time::Duration, f32::consts::PI};
+use std::{f32::consts::PI, time::Duration};
 
-use crate::{
-    cursor::{Position, Velocity},
-    osc_encode_decode::BlobParams,
-};
+use crate::cursor::{Position, Velocity};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Blob {
-    session_id: i32,
-    time: Duration,
-    position: Position,
-    velocity: Velocity,
-    acceleration: f32,
-    angle: f32,
-    rotation_speed: f32,
-    rotation_acceleration: f32,
-    width: f32,
-    height: f32,
-    area: f32
+    pub(crate) session_id: i32,
+    pub(crate) position: Position,
+    pub(crate) velocity: Velocity,
+    pub(crate) acceleration: f32,
+    pub(crate) angle: f32,
+    pub(crate) rotation_speed: f32,
+    pub(crate) rotation_acceleration: f32,
+    pub(crate) width: f32,
+    pub(crate) height: f32,
+    pub(crate) area: f32,
 }
 
 impl Blob {
     /// Creates a new [Blob]
     /// # Arguments
-    /// * `time` - the time of creation
     /// * `session_id` - a unique session ID
     /// * `position` - a normalized [Position]
     /// * `angle` - an angle in radians
@@ -31,7 +26,6 @@ impl Blob {
     /// * `height` - a normalized height
     /// * `area` - a normalized area
     pub fn new(
-        time: Duration,
         session_id: i32,
         position: Position,
         angle: f32,
@@ -41,7 +35,6 @@ impl Blob {
     ) -> Self {
         Self {
             session_id,
-            time,
             position,
             velocity: Velocity::default(),
             acceleration: 0f32,
@@ -50,7 +43,7 @@ impl Blob {
             rotation_acceleration: 0f32,
             width,
             height,
-            area
+            area,
         }
     }
 
@@ -74,20 +67,24 @@ impl Blob {
         self
     }
 
-    pub fn get_time(&self) -> Duration {
-        self.time
-    }
-
+    /// Updates the [Blob], computing its velocity, acceleration, rotation speed and rotation acceleration
+    /// # Arguments
+    /// * `delta_time` - the [Duration] since last update
+    /// * `position` - the new [Position]
+    /// * `angle` - the new angle
+    /// * `width` - the new width
+    /// * `height` - the new height
+    /// * `area` - the new area
     pub fn update(
         &mut self,
-        time: Duration,
+        delta_time: Duration,
         position: Position,
         angle: f32,
         width: f32,
         height: f32,
         area: f32,
     ) {
-        let delta_time = (time - self.time).as_secs_f32();
+        let delta_time = delta_time.as_secs_f32();
 
         let distance = position.distance_from(&self.position);
         let delta_x = position.x - self.position.x;
@@ -100,7 +97,7 @@ impl Blob {
             x: delta_x / delta_time,
             y: delta_y / delta_time,
         };
-        
+
         self.acceleration = (speed - last_speed) / delta_time;
         self.position = position;
 
@@ -113,55 +110,6 @@ impl Blob {
         self.width = width;
         self.height = height;
         self.area = area;
-
-        self.time = time;
-    }
-
-    #[allow(clippy::too_many_arguments)]
-    pub fn update_values(
-        &mut self,
-        time: Duration,
-        position: Position,
-        angle: f32,
-        width: f32,
-        height: f32,
-        area: f32,
-        velocity: Velocity,
-        rotation_speed: f32,
-        acceleration: f32,
-        rotation_acceleration: f32,
-    ) {
-        self.time = time;
-        self.position = position;
-        self.angle = angle;
-        self.width = width;
-        self.height = height;
-        self.area = area;
-        self.velocity = velocity;
-        self.rotation_speed = rotation_speed;
-        self.acceleration = acceleration;
-        self.rotation_acceleration = rotation_acceleration;
-    }
-
-    pub fn update_from_params(&mut self, time: Duration, params: BlobParams) {
-        self.update_values(
-            time,
-            Position {
-                x: params.x_pos,
-                y: params.y_pos,
-            },
-            params.angle,
-            params.width,
-            params.height,
-            params.area,
-            Velocity {
-                x: params.x_vel,
-                y: params.y_vel,
-            },
-            params.rotation_speed,
-            params.acceleration,
-            params.rotation_acceleration,
-        );
     }
 
     pub fn get_session_id(&self) -> i32 {
@@ -253,36 +201,6 @@ impl PartialEq for Blob {
     }
 }
 
-impl From<(Duration, BlobParams)> for Blob {
-    fn from((time, params): (Duration, BlobParams)) -> Self {
-        Self {
-            session_id: params.session_id,
-            position: Position {
-                x: params.x_pos,
-                y: params.y_pos,
-            },
-            angle: params.angle,
-            width: params.width,
-            height: params.height,
-            area: params.area,
-            velocity: Velocity {
-                x: params.x_vel,
-                y: params.y_vel,
-            },
-            rotation_speed: params.rotation_speed,
-            acceleration: params.acceleration,
-            rotation_acceleration: params.rotation_acceleration,
-            time
-        }
-    }
-}
-
-impl From<BlobParams> for Blob {
-    fn from(params: BlobParams) -> Self {
-        (Duration::default(), params).into()
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::{f32::consts::SQRT_2, time::Duration};
@@ -291,15 +209,7 @@ mod tests {
 
     #[test]
     fn blob_update() {
-        let mut blob = Blob::new(
-            Duration::default(),
-            0,
-            Position { x: 0., y: 0. },
-            0.,
-            0.,
-            0.,
-            0.,
-        );
+        let mut blob = Blob::new(0, Position { x: 0., y: 0. }, 0., 0., 0., 0.);
 
         blob.update(
             Duration::from_secs(1),

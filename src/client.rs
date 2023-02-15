@@ -4,7 +4,7 @@ use indexmap::IndexMap;
 use ringbuffer::{ConstGenericRingBuffer, RingBufferWrite, RingBufferRead};
 use rosc::{OscPacket};
 
-use crate::{osc_receiver::{UdpReceiver, RoscReceiver}, cursor::{Cursor}, object::Object, blob::Blob, errors::{TuioError, OscReceiverError}, osc_encode_decode::{RoscDecoder, DecodeOsc, self, SetParams}};
+use crate::{osc_receiver::{UdpReceiver, RoscReceiver}, cursor::{Cursor}, object::Object, blob::Blob, errors::{TuioError, OscReceiverError}, osc_encode_decode::{OscDecoder, DecodeOsc, self, Set}};
 
 #[derive(Default)]
 pub struct TuioEvents {
@@ -185,7 +185,7 @@ impl Client {
 
     fn process_osc_packet(&self, packet: OscPacket, events: &mut TuioEvents) -> Result<bool, TuioError> {
         if let OscPacket::Bundle(bundle) = packet {
-            let decoded_bundle = RoscDecoder::decode_bundle(bundle)?;
+            let decoded_bundle = OscDecoder::decode_bundle(bundle)?;
             
             let to_keep: HashSet<i32> = HashSet::from_iter(decoded_bundle.alive);
             
@@ -200,16 +200,14 @@ impl Client {
                             events.cursor_events.push(CursorEvent::Remove(cursor));
                         }
 
-                        if let Some(SetParams::Cursor(params_collection)) = decoded_bundle.set {
-                            for params in params_collection {
-                                match cursor_map.entry(params.session_id) {
+                        if let Some(Set::Cursor(cursor_collection)) = decoded_bundle.set {
+                            for cursor in cursor_collection {
+                                match cursor_map.entry(cursor.get_session_id()) {
                                     indexmap::map::Entry::Occupied(mut entry) => {
-                                        let cursor = entry.get_mut();
-                                        cursor.update_from_params(self.current_time.get(), params);
                                         events.cursor_events.push(CursorEvent::Update(cursor.clone()));
+                                        entry.insert(cursor);
                                     },
                                     indexmap::map::Entry::Vacant(entry) => {
-                                        let cursor = Cursor::from((self.current_time.get(), params));
                                         events.cursor_events.push(CursorEvent::New(cursor.clone()));
                                         entry.insert(cursor);
                                     },
@@ -224,16 +222,14 @@ impl Client {
                             events.object_events.push(ObjectEvent::Remove(object));
                         }
 
-                        if let Some(SetParams::Object(params_collection)) = decoded_bundle.set {
-                            for params in params_collection {
-                                match object_map.entry(params.session_id) {
+                        if let Some(Set::Object(object_collection)) = decoded_bundle.set {
+                            for object in object_collection {
+                                match object_map.entry(object.get_session_id()) {
                                     indexmap::map::Entry::Occupied(mut entry) => {
-                                        let object = entry.get_mut();
-                                        object.update_from_params(self.current_time.get(), params);
                                         events.object_events.push(ObjectEvent::Update(object.clone()));
+                                        entry.insert(object);
                                     },
                                     indexmap::map::Entry::Vacant(entry) => {
-                                        let object = Object::from((self.current_time.get(), params));
                                         events.object_events.push(ObjectEvent::New(object.clone()));
                                         entry.insert(object);
                                     },
@@ -248,16 +244,14 @@ impl Client {
                             events.blob_events.push(BlobEvent::Remove(blob));
                         }
 
-                        if let Some(SetParams::Blob(params_collection)) = decoded_bundle.set {
-                            for params in params_collection {
-                                match blob_map.entry(params.session_id) {
+                        if let Some(Set::Blob(blob_collection)) = decoded_bundle.set {
+                            for blob in blob_collection {
+                                match blob_map.entry(blob.get_session_id()) {
                                     indexmap::map::Entry::Occupied(mut entry) => {
-                                        let blob = entry.get_mut();
-                                        blob.update_from_params(self.current_time.get(), params);
                                         events.blob_events.push(BlobEvent::Update(blob.clone()));
+                                        entry.insert(blob);
                                     },
                                     indexmap::map::Entry::Vacant(entry) => {
-                                        let blob = Blob::from((self.current_time.get(), params));
                                         events.blob_events.push(BlobEvent::New(blob.clone()));
                                         entry.insert(blob);
                                     },

@@ -1,6 +1,6 @@
 use std::time::{Duration};
 
-use tuio_rs::{server::Server, client::{Client, CursorEvent, BlobEvent, ObjectEvent, TuioEvents}};
+use tuio_rs::{Client, client::{TuioEvents, CursorEvent, ObjectEvent, BlobEvent}, Server};
 
 fn process_events(events: TuioEvents) {
     for event in events.cursor_events {

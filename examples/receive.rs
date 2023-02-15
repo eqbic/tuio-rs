@@ -1,4 +1,4 @@
-use tuio_rs::{client::{Client, CursorEvent, BlobEvent, ObjectEvent, TuioEvents}};
+use tuio_rs::client::{Client, CursorEvent, BlobEvent, ObjectEvent, TuioEvents};
 
 fn process_events(events: TuioEvents) {
     for event in events.cursor_events {

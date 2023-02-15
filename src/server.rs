@@ -5,10 +5,10 @@ use rosc::OscType;
 use local_ip_address::local_ip;
 use indexmap::{IndexMap};
 
-use crate::{cursor::{Cursor, Position}, object::Object, blob::Blob, osc_encode_decode::{EncodeOsc, RoscEncoder, EncodingBehaviour}}; 
+use crate::{cursor::{Position}, osc_encode_decode::{EncodeOsc, OscEncoder}, Object, Cursor, Blob}; 
 
 /// Base trait to implement sending OSC over various transport methods
-pub trait OscSender<P, E> where E: Error {
+pub trait SendOsc<P, E> where E: Error {
     /// Sends an OSC packet.
     /// Returns an [Error] if packet's encoding fails
     ///
@@ -39,7 +39,7 @@ impl UdpSender {
     }
 }
 
-impl OscSender<OscPacket, OscError> for UdpSender {
+impl SendOsc<OscPacket, OscError> for UdpSender {
     /// Sends an [OscPacket] over UDP.
     /// Returns an [OscError] if packet's encoding fails
     ///
@@ -64,27 +64,32 @@ impl OscSender<OscPacket, OscError> for UdpSender {
 
 /// TUIO Server which keeps track of all TUIO elements and which send TUIO messages over the network
 pub struct Server {
-    sender_list: Vec<Box<dyn OscSender<OscPacket, OscError>>>,
+    sender_list: Vec<Box<dyn SendOsc<OscPacket, OscError>>>,
     source_name: String,
     session_id: i32,
     object_map: IndexMap<i32, Object>,
     object_updated: bool,
+    frame_cursor_ids: Vec<i32>,
+    frame_object_ids: Vec<i32>,
+    frame_blob_ids: Vec<i32>,
     cursor_map: IndexMap<i32, Cursor>,
     cursor_updated: bool,
     blob_map: IndexMap<i32, Blob>,
     blob_updated: bool,
     instant: Instant,
-    current_frame_time: Duration,
+    last_frame_instant: Instant,
+    frame_duration: Duration,
     last_frame_id: AtomicI32,
-    encoding_behaviour: EncodingBehaviour,
+    /// Enables the full update of all currently active and inactive [Object]s, [Cursor]s and [Blob]s
+    pub full_update: bool,
     periodic_messaging: bool,
     update_interval: Duration,
     pub object_profiling: bool,
-    object_update_time: Duration,
+    object_update_time: Instant,
     pub cursor_profiling: bool,
-    cursor_update_time: Duration,
+    cursor_update_time: Instant,
     pub blob_profiling: bool,
-    blob_update_time: Duration,
+    blob_update_time: Instant,
 }
 
 impl Server {
@@ -108,7 +113,7 @@ impl Server {
     ///
     /// # Arguments
     /// * `osc_sender` - a sender implementing [OscSender]
-    pub fn from_osc_sender(osc_sender: impl OscSender<OscPacket, OscError> + 'static) -> Self {
+    pub fn from_osc_sender(osc_sender: impl SendOsc<OscPacket, OscError> + 'static) -> Self {
         Self {
             sender_list: vec![Box::new(osc_sender)],
             source_name: String::new(),
@@ -120,35 +125,29 @@ impl Server {
             blob_map: IndexMap::new(),
             blob_updated: false,
             instant: Instant::now(),
-            current_frame_time: Duration::default(),
+            last_frame_instant: Instant::now(),
+            frame_duration: Duration::default(),
             last_frame_id: AtomicI32::new(0),
-            encoding_behaviour: EncodingBehaviour::CurrentFrame,
+            full_update: false,
             periodic_messaging: false,
             update_interval: Duration::from_secs(1),
             object_profiling: true,
-            object_update_time: Duration::default(),
+            object_update_time: Instant::now(),
             cursor_profiling: true,
-            cursor_update_time: Duration::default(),
+            cursor_update_time: Instant::now(),
             blob_profiling: true,
-            blob_update_time: Duration::default(),
+            blob_update_time: Instant::now(),
+            frame_cursor_ids: Vec::new(),
+            frame_object_ids: Vec::new(),
+            frame_blob_ids: Vec::new(),
         }
-    }
-
-    /// Enables the full update of all currently active and inactive [Object]s, [Cursor]s and [Blob]s
-    pub fn enable_full_update(&mut self) {
-        self.encoding_behaviour = EncodingBehaviour::Full;
-    }
-
-    /// Disables the full update of all currently active and inactive [Object]s, [Cursor]s and [Blob]s
-    pub fn disable_full_update(&mut self) {
-        self.encoding_behaviour = EncodingBehaviour::CurrentFrame;
     }
 
     /// Adds an OSC sender implementing [OscSender] trait
     ///
     /// # Arguments
     /// * `osc_sender` - a sender implementing [OscSender]
-    pub fn add_osc_sender(&mut self, osc_sender: impl OscSender<OscPacket, OscError> + 'static) {
+    pub fn add_osc_sender(&mut self, osc_sender: impl SendOsc<OscPacket, OscError> + 'static) {
         self.sender_list.push(Box::new(osc_sender));
     }
 
@@ -199,8 +198,9 @@ impl Server {
     pub fn create_object(&mut self, class_id: i32, x: f32, y: f32, angle: f32) -> i32 {
         let session_id = self.get_session_id();
         
-        let object = Object::new(self.current_frame_time, session_id, class_id, Position{x, y}, angle);
+        let object = Object::new(session_id, class_id, Position{x, y}, angle);
         self.object_map.insert(session_id, object);
+        self.frame_object_ids.push(session_id);
         self.object_updated = true;
         session_id
     }
@@ -214,7 +214,9 @@ impl Server {
     /// * `angle` - the new object's angle
     pub fn update_object(&mut self, session_id: i32, x: f32, y: f32, angle: f32) {
         if let Some(object) = self.object_map.get_mut(&session_id) {
-            object.update(self.current_frame_time, Position{x, y}, angle);
+            object.update(self.frame_duration, Position{x, y}, angle);
+            self.frame_object_ids.push(session_id);
+            self.frame_object_ids.push(session_id);
             self.object_updated = true;
         }
     }
@@ -237,8 +239,9 @@ impl Server {
     pub fn create_cursor(&mut self, x: f32, y: f32) -> i32 {
         let session_id = self.get_session_id();
         
-        let cursor = Cursor::new(self.current_frame_time, session_id, Position{x, y});
+        let cursor = Cursor::new(session_id, Position{x, y});
         self.cursor_map.insert(session_id, cursor);
+        self.frame_cursor_ids.push(session_id);
         self.cursor_updated = true;
         session_id
     }
@@ -251,7 +254,8 @@ impl Server {
     /// * `y` - the new cursor's y position
     pub fn update_cursor(&mut self, session_id: i32, x: f32, y: f32) {
         if let Some(cursor) = self.cursor_map.get_mut(&session_id) {
-            cursor.update(self.current_frame_time, Position{x, y});
+            cursor.update(self.frame_duration, Position{x, y});
+            self.frame_cursor_ids.push(session_id);
             self.cursor_updated = true;
         }
     }
@@ -278,8 +282,9 @@ impl Server {
     pub fn create_blob(&mut self, x: f32, y: f32, angle: f32, width: f32, height: f32, area: f32) -> i32 {
         let session_id = self.get_session_id();
         
-        let blob = Blob::new(self.current_frame_time, session_id, Position{x, y}, angle, width, height, area);
+        let blob = Blob::new(session_id, Position{x, y}, angle, width, height, area);
         self.blob_map.insert(session_id, blob);
+        self.frame_blob_ids.push(session_id);
         self.blob_updated = true;
         session_id
     }
@@ -297,7 +302,9 @@ impl Server {
     /// * `area` - the new blob's area
     pub fn update_blob(&mut self, session_id: i32, x: f32, y: f32, angle: f32, width: f32, height: f32, area: f32) {
         if let Some(blob) = self.blob_map.get_mut(&session_id) {
-            blob.update(self.current_frame_time, Position{x, y}, angle, width, height, area);
+            blob.update(self.frame_duration, Position{x, y}, angle, width, height, area);
+            self.frame_blob_ids.push(session_id);
+            self.frame_blob_ids.push(session_id);
             self.blob_updated = true;
         }
     }
@@ -314,7 +321,8 @@ impl Server {
 
     /// Initializes a new frame.
     pub fn init_frame(&mut self) {
-        self.current_frame_time = self.instant.elapsed();
+        self.frame_duration = self.instant.duration_since(self.last_frame_instant);
+        self.last_frame_instant = Instant::now();
         self.last_frame_id.fetch_add(1, Ordering::SeqCst);
     }
 
@@ -322,30 +330,55 @@ impl Server {
     /// 
     /// Generates and sends TUIO messages of all currently active and updated [Object]s, [Cursor]s and [Blob]s
     pub fn commit_frame(&mut self) {
-        if self.object_updated || (self.periodic_messaging && self.object_profiling && (self.current_frame_time - self.object_update_time) >= self.update_interval) {
-            self.deliver_osc_packet(OscPacket::Bundle(RoscEncoder::encode_object_bundle(self.object_map.values(), self.source_name.clone(), self.current_frame_time, self.last_frame_id.load(Ordering::SeqCst), &self.encoding_behaviour)));
-            self.object_update_time = self.current_frame_time;
+        if self.object_updated || (self.periodic_messaging && self.object_profiling && self.object_update_time.duration_since(self.last_frame_instant) >= self.update_interval) {
+            if self.full_update {
+                let object_collection = self.frame_object_ids.iter().map(|id| self.object_map.get(id).unwrap());
+                self.deliver_osc_packet(OscPacket::Bundle(OscEncoder::encode_object_bundle(object_collection, self.source_name.clone(), self.last_frame_id.load(Ordering::SeqCst))));
+            }
+            else {
+                let object_collection = self.object_map.values();
+                self.deliver_osc_packet(OscPacket::Bundle(OscEncoder::encode_object_bundle(object_collection, self.source_name.clone(), self.last_frame_id.load(Ordering::SeqCst))));
+            }
+            
+            self.frame_object_ids.clear();
+            self.object_update_time = self.last_frame_instant;
             self.object_updated = false;
         }
 
-        if self.cursor_updated || (self.periodic_messaging && self.cursor_profiling && (self.current_frame_time - self.cursor_update_time) >= self.update_interval) {
-            self.deliver_osc_packet(OscPacket::Bundle(RoscEncoder::encode_cursor_bundle(self.cursor_map.values(), self.source_name.clone(), self.current_frame_time, self.last_frame_id.load(Ordering::SeqCst), &self.encoding_behaviour)));
-            self.cursor_update_time = self.current_frame_time;
+        if self.cursor_updated || (self.periodic_messaging && self.cursor_profiling && self.cursor_update_time.duration_since(self.last_frame_instant) >= self.update_interval) {
+            if !self.full_update {
+                let cursor_collection = self.frame_cursor_ids.iter().map(|id| self.cursor_map.get(id).unwrap());
+                self.deliver_osc_packet(OscPacket::Bundle(OscEncoder::encode_cursor_bundle(cursor_collection, self.source_name.clone(), self.last_frame_id.load(Ordering::SeqCst))));
+            } else {
+                let cursor_collection = self.cursor_map.iter().map(|(_, cursor)| cursor);
+                self.deliver_osc_packet(OscPacket::Bundle(OscEncoder::encode_cursor_bundle(cursor_collection, self.source_name.clone(), self.last_frame_id.load(Ordering::SeqCst))));
+            };
+
+            self.frame_cursor_ids.clear();
+            self.cursor_update_time = self.last_frame_instant;
             self.cursor_updated = false;
         }
         
-        if self.blob_updated || (self.periodic_messaging && self.blob_profiling && (self.current_frame_time - self.blob_update_time) >= self.update_interval) {
-            self.deliver_osc_packet(OscPacket::Bundle(RoscEncoder::encode_blob_bundle(self.blob_map.values(), self.source_name.clone(), self.current_frame_time, self.last_frame_id.load(Ordering::SeqCst), &self.encoding_behaviour)));
-            self.blob_update_time = self.current_frame_time;
+        if self.blob_updated || (self.periodic_messaging && self.blob_profiling && self.blob_update_time.duration_since(self.last_frame_instant) >= self.update_interval) {
+            if !self.full_update {
+                let blob_collection = self.frame_blob_ids.iter().map(|id| self.blob_map.get(id).unwrap());
+                self.deliver_osc_packet(OscPacket::Bundle(OscEncoder::encode_blob_bundle(blob_collection, self.source_name.clone(), self.last_frame_id.load(Ordering::SeqCst))));
+            } else {
+                let blob_collection = self.blob_map.values();
+                self.deliver_osc_packet(OscPacket::Bundle(OscEncoder::encode_blob_bundle(blob_collection, self.source_name.clone(), self.last_frame_id.load(Ordering::SeqCst))));
+            };
+            
+            self.frame_blob_ids.clear();
+            self.blob_update_time = self.last_frame_instant;
             self.blob_updated = false;
         }
     }
 
     pub fn send_full_messages(&self) {
         let frame_id = self.last_frame_id.load(Ordering::SeqCst);
-        self.deliver_osc_packet(OscPacket::Bundle(RoscEncoder::encode_object_bundle(self.object_map.values(), self.source_name.clone(), self.current_frame_time, frame_id, &EncodingBehaviour::Full)));
-        self.deliver_osc_packet(OscPacket::Bundle(RoscEncoder::encode_cursor_bundle(self.cursor_map.values(), self.source_name.clone(), self.current_frame_time, frame_id, &EncodingBehaviour::Full)));
-        self.deliver_osc_packet(OscPacket::Bundle(RoscEncoder::encode_blob_bundle(self.blob_map.values(), self.source_name.clone(), self.current_frame_time, frame_id, &EncodingBehaviour::Full)));
+        self.deliver_osc_packet(OscPacket::Bundle(OscEncoder::encode_object_bundle(self.object_map.values(), self.source_name.clone(), frame_id)));
+        self.deliver_osc_packet(OscPacket::Bundle(OscEncoder::encode_cursor_bundle(self.cursor_map.values(), self.source_name.clone(), frame_id)));
+        self.deliver_osc_packet(OscPacket::Bundle(OscEncoder::encode_blob_bundle(self.blob_map.values(), self.source_name.clone(), frame_id)));
     }
     
     fn deliver_osc_packet(&self, packet: OscPacket) {

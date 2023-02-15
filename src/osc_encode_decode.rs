@@ -1,17 +1,8 @@
-use std::{time::{Duration, SystemTime}, iter};
+use std::{time::{SystemTime}, iter};
 
 use rosc::{OscBundle, OscPacket, OscMessage, OscType, OscTime};
 
-use crate::{object::Object, cursor::Cursor, blob::Blob, errors::TuioError};
-
-#[derive(PartialEq, Eq)]
-/// Signals the encoding behaviour
-pub enum EncodingBehaviour {
-    /// Encodes only the TUIO elements updated during the current frame
-    CurrentFrame,
-    /// Encodes all alive TUIO elements
-    Full
-}
+use crate::{object::Object, cursor::{Cursor, Position, Velocity}, blob::Blob, errors::TuioError};
 
 /// Base trait to implement an OSC encoder
 pub trait EncodeOsc<T> {
@@ -19,35 +10,29 @@ pub trait EncodeOsc<T> {
     /// # Arguments
     /// * `object_collection` - an iterable [Object] collection
     /// * `source_name` - the source's name
-    /// * `frame_time` - the current's frame time
     /// * `frame_id` - the current's frame id
-    /// * `behaviour` - the encoding behaviour
-    fn encode_object_bundle<'a, I>(object_collection: I, source_name: String, frame_time: Duration, frame_id: i32, behaviour: &EncodingBehaviour) -> T where I: IntoIterator<Item = &'a Object>;
+    fn encode_object_bundle<'a, I>(object_collection: I, source_name: String, frame_id: i32) -> T where I: IntoIterator<Item = &'a Object>;
 
     /// Encodes an [Cursor] collection into an OSC bundle
     /// # Arguments
     /// * `cursor_collection` - an iterable [Cursor] collection
     /// * `source_name` - the source's name
-    /// * `frame_time` - the current's frame time
     /// * `frame_id` - the current's frame id
-    /// * `behaviour` - the encoding behaviour
-    fn encode_cursor_bundle<'a, I>(cursor_collection: I, source_name: String, frame_time: Duration, frame_id: i32, behaviour: &EncodingBehaviour) -> T where I: IntoIterator<Item = &'a Cursor>;
+    fn encode_cursor_bundle<'a, I>(cursor_collection: I, source_name: String, frame_id: i32) -> T where I: IntoIterator<Item = &'a Cursor>;
 
     /// Encodes an [Blob] collection into an OSC bundle
     /// # Arguments
     /// * `blob_collection` - an iterable [Blob] collection
     /// * `source_name` - the source's name
-    /// * `frame_time` - the current's frame time
     /// * `frame_id` - the current's frame id
-    /// * `behaviour` - the encoding behaviour
-    fn encode_blob_bundle<'a, I>(blob_collection: I, source_name: String, frame_time: Duration, frame_id: i32, behaviour: &EncodingBehaviour) -> T where I: IntoIterator<Item = &'a Blob>;
+    fn encode_blob_bundle<'a, I>(blob_collection: I, source_name: String, frame_id: i32) -> T where I: IntoIterator<Item = &'a Blob>;
 }
 
 /// An implementation of trait [EncodeOsc] based on [rosc]
-pub struct RoscEncoder;
+pub struct OscEncoder;
 
-impl EncodeOsc<OscBundle> for RoscEncoder {
-    fn encode_object_bundle<'a, I>(object_collection: I, source_name: String, frame_time: Duration, frame_id: i32, behaviour: &EncodingBehaviour) -> OscBundle where I: IntoIterator<Item = &'a Object> {
+impl EncodeOsc<OscBundle> for OscEncoder {
+    fn encode_object_bundle<'a, I>(object_collection: I, source_name: String, frame_id: i32) -> OscBundle where I: IntoIterator<Item = &'a Object> {
         let source_message = OscPacket::Message(OscMessage {
             addr: "/tuio/2Dobj".into(),
             args: vec![
@@ -62,10 +47,6 @@ impl EncodeOsc<OscBundle> for RoscEncoder {
         for object in object_collection.into_iter()  {
             let id = object.get_session_id();
             object_ids.push(OscType::Int(id));
-            
-            if behaviour == &EncodingBehaviour::CurrentFrame && object.get_time() != frame_time {
-                continue;
-            }
     
             set_messages.push(OscPacket::Message(OscMessage {
                 addr: "/tuio/2Dobj".into(),
@@ -107,7 +88,7 @@ impl EncodeOsc<OscBundle> for RoscEncoder {
         }
     }
 
-    fn encode_cursor_bundle<'a, I>(cursor_collection: I, source_name: String, frame_time: Duration, frame_id: i32, behaviour: &EncodingBehaviour) -> OscBundle where I: IntoIterator<Item = &'a Cursor> {
+    fn encode_cursor_bundle<'a, I>(cursor_collection: I, source_name: String, frame_id: i32) -> OscBundle where I: IntoIterator<Item = &'a Cursor> {
         let source_message = OscPacket::Message(OscMessage {
             addr: "/tuio/2Dcur".into(),
             args: vec![
@@ -122,10 +103,6 @@ impl EncodeOsc<OscBundle> for RoscEncoder {
         for cursor in cursor_collection.into_iter()  {
             let id = cursor.get_session_id();
             cursor_ids.push(OscType::Int(id));
-            
-            if behaviour == &EncodingBehaviour::CurrentFrame && cursor.get_time() != frame_time {
-                continue;
-            }
 
             set_messages.push(OscPacket::Message(OscMessage {
                 addr: "/tuio/2Dcur".into(),
@@ -163,7 +140,7 @@ impl EncodeOsc<OscBundle> for RoscEncoder {
         }
     }
 
-    fn encode_blob_bundle<'a, I>(blob_collection: I, source_name: String, frame_time: Duration, frame_id: i32, behaviour: &EncodingBehaviour) -> OscBundle where I: IntoIterator<Item = &'a Blob> {
+    fn encode_blob_bundle<'a, I>(blob_collection: I, source_name: String, frame_id: i32) -> OscBundle where I: IntoIterator<Item = &'a Blob> {
         let source_message = OscPacket::Message(OscMessage {
             addr: "/tuio/2Dblb".into(),
             args: vec![
@@ -178,10 +155,6 @@ impl EncodeOsc<OscBundle> for RoscEncoder {
         for blob in blob_collection.into_iter() {     
             let id = blob.get_session_id();       
             blob_ids.push(OscType::Int(id));
-
-            if behaviour == &EncodingBehaviour::CurrentFrame && blob.get_time() != frame_time {
-                continue;
-            }
             
             set_messages.push(OscPacket::Message(OscMessage {
                 addr: "/tuio/2Dblb".into(),
@@ -267,10 +240,10 @@ pub struct BlobParams {
 }
 
 /// An enum of a "set" TUIO message
-pub enum SetParams {
-    Cursor(Vec<CursorParams>),
-    Object(Vec<ObjectParams>),
-    Blob(Vec<BlobParams>),
+pub enum Set {
+    Cursor(Vec<Cursor>),
+    Object(Vec<Object>),
+    Blob(Vec<Blob>),
 }
 
 #[derive(Default)]
@@ -288,7 +261,7 @@ pub struct TuioBundle {
     pub tuio_type: TuioBundleType,
     pub source: String,
     pub alive: Vec<i32>,
-    pub set: Option<SetParams>,
+    pub set: Option<Set>,
     pub fseq: i32
 }
 
@@ -298,7 +271,7 @@ pub trait DecodeOsc<T> {
 }
 
 /// An implementation of trait [DecodeOsc] based on [rosc]
-pub struct RoscDecoder;
+pub struct OscDecoder;
 
 fn try_unwrap_source_name(message: &OscMessage) -> Result<String, TuioError> {
     match message.args.get(1) {
@@ -312,50 +285,44 @@ fn try_unwrap_source_name(message: &OscMessage) -> Result<String, TuioError> {
     }
 }
 
-fn try_unwrap_object_args(args: &[OscType]) -> Result<ObjectParams, u8> {
-    Ok(ObjectParams {
+fn try_unwrap_object_args(args: &[OscType]) -> Result<Object, u8> {
+    Ok(Object {
         session_id: args[1].clone().int().ok_or(1)?,
         class_id: args[2].clone().int().ok_or(2)?,
-        x_pos: args[3].clone().float().ok_or(3)?,
-        y_pos: args[4].clone().float().ok_or(4)?,
+        position: Position {x: args[3].clone().float().ok_or(3)?, y: args[4].clone().float().ok_or(4)?},
         angle: args[5].clone().float().ok_or(5)?,
-        x_vel: args[6].clone().float().ok_or(6)?,
-        y_vel: args[7].clone().float().ok_or(7)?,
+        velocity: Velocity {x: args[6].clone().float().ok_or(6)?, y: args[7].clone().float().ok_or(7)?},
         rotation_speed: args[8].clone().float().ok_or(8)?,
         acceleration: args[9].clone().float().ok_or(9)?,
         rotation_acceleration: args[10].clone().float().ok_or(10)?,
     })
 }
 
-fn try_unwrap_cursor_args(args: &[OscType]) -> Result<CursorParams, u8> {
-    Ok(CursorParams {
+fn try_unwrap_cursor_args(args: &[OscType]) -> Result<Cursor, u8> {
+    Ok(Cursor {
         session_id: args[1].clone().int().ok_or(1)?,
-        x_pos: args[2].clone().float().ok_or(2)?,
-        y_pos: args[3].clone().float().ok_or(3)?,
-        x_vel: args[4].clone().float().ok_or(4)?,
-        y_vel: args[5].clone().float().ok_or(5)?,
+        position: Position {x: args[2].clone().float().ok_or(2)?, y: args[3].clone().float().ok_or(3)?},
+        velocity: Velocity {x: args[4].clone().float().ok_or(4)?, y: args[5].clone().float().ok_or(5)?},
         acceleration: args[6].clone().float().ok_or(6)?,
     })
 }
 
-fn try_unwrap_blob_args(args: &[OscType]) -> Result<BlobParams, u8> {
-    Ok(BlobParams {
+fn try_unwrap_blob_args(args: &[OscType]) -> Result<Blob, u8> {
+    Ok(Blob {
         session_id: args[1].clone().int().ok_or(1)?,
-        x_pos: args[2].clone().float().ok_or(2)?,
-        y_pos: args[3].clone().float().ok_or(3)?,
+        position: Position {x: args[2].clone().float().ok_or(2)?, y: args[3].clone().float().ok_or(3)?},
         angle: args[4].clone().float().ok_or(4)?,
         width: args[5].clone().float().ok_or(5)?,
         height: args[6].clone().float().ok_or(6)?,
         area: args[7].clone().float().ok_or(7)?,
-        x_vel: args[8].clone().float().ok_or(8)?,
-        y_vel: args[9].clone().float().ok_or(9)?,
+        velocity: Velocity {x: args[8].clone().float().ok_or(8)?, y: args[9].clone().float().ok_or(9)?},
         rotation_speed: args[10].clone().float().ok_or(10)?,
         acceleration: args[11].clone().float().ok_or(11)?,
         rotation_acceleration: args[12].clone().float().ok_or(12)?,
     })
 }
 
-impl DecodeOsc<OscBundle> for RoscDecoder {
+impl DecodeOsc<OscBundle> for OscDecoder {
     fn decode_bundle(bundle: OscBundle) -> Result<TuioBundle, TuioError> {
         let mut decoded_bundle = TuioBundle::default();
         
@@ -378,53 +345,52 @@ impl DecodeOsc<OscBundle> for RoscDecoder {
                                 decoded_bundle.alive = message.args.iter().skip(1).filter_map(|e| e.clone().int()).collect();
                             },
                             "set" => {
-                                let set = decoded_bundle.set.get_or_insert(
-                                    match decoded_bundle.tuio_type {
-                                        TuioBundleType::Cursor => SetParams::Cursor(Vec::new()),
-                                        TuioBundleType::Object => SetParams::Object(Vec::new()),
-                                        TuioBundleType::Blob => SetParams::Blob(Vec::new()),
-                                        TuioBundleType::Unknown => return Err(TuioError::IncompleteBundle(bundle)),
-                                    }
-                                );
-    
-                                match set {
-                                    SetParams::Object(ref mut set) => {
-                                        if message.args.len() != 11 {
-                                            return Err(TuioError::MissingArguments(message.clone()));
-                                        }
-                                        
-                                        match try_unwrap_object_args(&message.args) {
-                                            Ok(params) => {
-                                                set.push(params);
-                                            },
-                                            Err(index) => return Err(TuioError::WrongArgumentType(message.clone(), index)),
+                                match decoded_bundle.tuio_type {
+                                    TuioBundleType::Cursor => {
+                                        if let Set::Cursor(set) = decoded_bundle.set.get_or_insert(Set::Cursor(Vec::new())) {
+                                            if message.args.len() != 7 {
+                                                return Err(TuioError::MissingArguments(message.clone()));
+                                            }
+        
+                                            match try_unwrap_cursor_args(&message.args) {
+                                                Ok(params) => {
+                                                    set.push(params);
+                                                },
+                                                Err(index) => return Err(TuioError::WrongArgumentType(message.clone(), index)),
+                                            }
                                         }
                                     },
-                                    SetParams::Cursor(ref mut set) => {
-                                        if message.args.len() != 7 {
-                                            return Err(TuioError::MissingArguments(message.clone()));
-                                        }
-    
-                                        match try_unwrap_cursor_args(&message.args) {
-                                            Ok(params) => {
-                                                set.push(params);
-                                            },
-                                            Err(index) => return Err(TuioError::WrongArgumentType(message.clone(), index)),
+                                    TuioBundleType::Object => {
+                                        if let Set::Object(set) = decoded_bundle.set.get_or_insert(Set::Object(Vec::new())) {
+                                            if message.args.len() != 11 {
+                                                return Err(TuioError::MissingArguments(message.clone()));
+                                            }
+                                            
+                                            match try_unwrap_object_args(&message.args) {
+                                                Ok(params) => {
+                                                    set.push(params);
+                                                },
+                                                Err(index) => return Err(TuioError::WrongArgumentType(message.clone(), index)),
+                                            }
                                         }
                                     },
-                                    SetParams::Blob(ref mut set) => {
-                                        if message.args.len() != 13 {
-                                            return Err(TuioError::MissingArguments(message.clone()));
+                                    TuioBundleType::Blob => {
+                                        if let Set::Blob(set) = decoded_bundle.set.get_or_insert(Set::Blob(Vec::new())) {
+                                            if message.args.len() != 13 {
+                                                return Err(TuioError::MissingArguments(message.clone()));
+                                            }
+        
+                                            match try_unwrap_blob_args(&message.args) {
+                                                Ok(params) => {
+                                                    set.push(params);
+                                                },
+                                                Err(index) => return Err(TuioError::WrongArgumentType(message.clone(), index)),
+                                            }
                                         }
-    
-                                        match try_unwrap_blob_args(&message.args) {
-                                            Ok(params) => {
-                                                set.push(params);
-                                            },
-                                            Err(index) => return Err(TuioError::WrongArgumentType(message.clone(), index)),
-                                        }
-                                    }
-                                };
+
+                                    },
+                                    TuioBundleType::Unknown => return Err(TuioError::IncompleteBundle(bundle)),
+                                }
                             },
                             "fseq" => {
                                 if let Some(OscType::Int(fseq)) = message.args.get(1) {
@@ -449,30 +415,25 @@ impl DecodeOsc<OscBundle> for RoscDecoder {
 
 #[cfg(test)]
 mod tests {
-    use std::time::Duration;
-
-    use crate::{cursor::{Cursor, Position}, object::Object, blob::Blob, osc_encode_decode::{RoscEncoder, EncodeOsc, self}};
+    use crate::{cursor::{Cursor, Position}, object::Object, blob::Blob, osc_encode_decode::{OscEncoder, EncodeOsc}};
 
     use super::*;
 
     #[test]
     fn encoding_decoding() {
-        let frame_time = Duration::default();
         let source = "test".to_string();
 
-        let cursors = vec![Cursor::new(frame_time, 0, Position {x: 0., y: 0.}), Cursor::new(Duration::from_secs(0), 1, Position {x: 0.5, y: 0.5})];
-        let objects = vec![Object::new(frame_time, 0, 0, Position {x: 0., y: 0.}, 0.), Object::new(Duration::from_secs(0), 1, 1, Position {x: 0.5, y: 0.5}, 0.)];
-        let blobs = vec![Blob::new(frame_time, 0, Position {x: 0., y: 0.}, 0., 0.3, 0.3, 0.09), Blob::new(Duration::from_secs(0), 1, Position {x: 0.5, y: 0.5}, 0., 0.5, 0.5, 0.25)];
+        let cursors = vec![Cursor::new(0, Position {x: 0., y: 0.}), Cursor::new(1, Position {x: 0.5, y: 0.5})];
+        let objects = vec![Object::new(0, 0, Position {x: 0., y: 0.}, 0.), Object::new(1, 1, Position {x: 0.5, y: 0.5}, 0.)];
+        let blobs = vec![Blob::new(0, Position {x: 0., y: 0.}, 0., 0.3, 0.3, 0.09), Blob::new(1, Position {x: 0.5, y: 0.5}, 0., 0.5, 0.5, 0.25)];
 
-        let cursor_bundle = RoscEncoder::encode_cursor_bundle(&cursors, source.clone(), frame_time, 0, &osc_encode_decode::EncodingBehaviour::CurrentFrame);
-        let object_bundle = RoscEncoder::encode_object_bundle(&objects, source.clone(), frame_time, 0, &osc_encode_decode::EncodingBehaviour::CurrentFrame);
-        let blob_bundle = RoscEncoder::encode_blob_bundle(&blobs, source, frame_time, 0, &osc_encode_decode::EncodingBehaviour::CurrentFrame);
-        
-        match RoscDecoder::decode_bundle(cursor_bundle) {
+        let cursor_bundle = OscEncoder::encode_cursor_bundle(&cursors, source.clone(), 0);
+        let object_bundle = OscEncoder::encode_object_bundle(&objects, source.clone(), 0);
+        let blob_bundle = OscEncoder::encode_blob_bundle(&blobs, source, 0);
+
+        match OscDecoder::decode_bundle(cursor_bundle) {
             Ok(decoded_bundle) => {
-                if let Some(SetParams::Cursor(set)) = decoded_bundle.set {
-                    let decoded_cursors: Vec<Cursor> = set.into_iter().map(|params| params.into()).collect();
-    
+                if let Some(Set::Cursor(decoded_cursors)) = decoded_bundle.set {
                     assert_eq!(decoded_cursors.len(), 2);
                     assert_eq!(cursors[0], decoded_cursors[0]);
                     assert_eq!(cursors[1], decoded_cursors[1]);
@@ -481,11 +442,9 @@ mod tests {
             Err(err) => {println!("{err}"); panic!()},
         }
 
-        match RoscDecoder::decode_bundle(object_bundle) {
+        match OscDecoder::decode_bundle(object_bundle) {
             Ok(decoded_bundle) => {
-                if let Some(SetParams::Object(set)) = decoded_bundle.set {
-                    let decoded_objects: Vec<Object> = set.into_iter().map(|params| params.into()).collect();
-    
+                if let Some(Set::Object(decoded_objects)) = decoded_bundle.set {
                     assert_eq!(decoded_objects.len(), 2);
                     assert_eq!(objects[0], decoded_objects[0]);
                     assert_eq!(objects[1], decoded_objects[1]);
@@ -494,11 +453,9 @@ mod tests {
             Err(err) => {println!("{err}"); panic!()},
         }
 
-        match RoscDecoder::decode_bundle(blob_bundle) {
+        match OscDecoder::decode_bundle(blob_bundle) {
             Ok(decoded_bundle) => {
-                if let Some(SetParams::Blob(set)) = decoded_bundle.set {
-                    let decoded_blobs: Vec<Blob> = set.into_iter().map(|params| params.into()).collect();
-    
+                if let Some(Set::Blob(decoded_blobs)) = decoded_bundle.set {
                     assert_eq!(decoded_blobs.len(), 2);
                     assert_eq!(blobs[0], decoded_blobs[0]);
                     assert_eq!(blobs[1], decoded_blobs[1]);

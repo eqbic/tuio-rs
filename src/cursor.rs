@@ -1,6 +1,4 @@
-use std::{time::Duration};
-
-use crate::osc_encode_decode::CursorParams;
+use std::time::Duration;
 
 #[derive(Default, Debug, Clone)]
 pub struct Position {
@@ -28,29 +26,25 @@ impl Velocity {
     }
 }
 
-// #[derive(Clone, Copy)]
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Cursor {
-    session_id: i32,
-    time: Duration,
-    position: Position,
-    velocity: Velocity,
-    acceleration: f32
+    pub(crate) session_id: i32,
+    pub(crate) position: Position,
+    pub(crate) velocity: Velocity,
+    pub(crate) acceleration: f32,
 }
 
 impl Cursor {
     /// Creates a new [Cursor]
     /// # Arguments
-    /// * `time` - the time of creation
     /// * `session_id` - a unique session ID
     /// * `position` - a normalized [Position]
-    pub fn new(time: Duration, session_id: i32, position: Position) -> Self {
+    pub fn new(session_id: i32, position: Position) -> Self {
         Self {
             session_id,
             position,
             velocity: Velocity::default(),
             acceleration: 0f32,
-            time
         }
     }
 
@@ -66,10 +60,6 @@ impl Cursor {
 
     pub fn get_session_id(&self) -> i32 {
         self.session_id
-    }
-
-    pub fn get_time(&self) -> Duration {
-        self.time
     }
 
     pub fn get_position(&self) -> &Position {
@@ -100,8 +90,12 @@ impl Cursor {
         self.acceleration
     }
 
-    pub fn update(&mut self, time: Duration, position: Position) {
-        let delta_time = (time - self.time).as_secs_f32();
+    /// Updates the [Cursor], computing its velocity and acceleration
+    /// # Arguments
+    /// * `delta_time` - the [Duration] since last update
+    /// * `position` - the new [Position]
+    pub fn update(&mut self, delta_time: Duration, position: Position) {
+        let delta_time = delta_time.as_secs_f32();
         let distance = position.distance_from(&self.position);
         let delta_x = position.x - self.position.x;
         let delta_y = position.y - self.position.y;
@@ -113,27 +107,9 @@ impl Cursor {
             x: delta_x / delta_time,
             y: delta_y / delta_time,
         };
-        
+
         self.acceleration = (speed - last_speed) / delta_time;
         self.position = position;
-        self.time = time;
-    }
-
-    pub fn update_values(
-        &mut self,
-        time: Duration,
-        position: Position,
-        velocity: Velocity,
-        acceleration: f32,
-    ) {
-        self.time = time;
-        self.position = position;
-        self.velocity = velocity;
-        self.acceleration = acceleration;
-    }
-
-    pub fn update_from_params(&mut self, time: Duration, params: CursorParams) {
-        self.update_values(time, Position{x: params.x_pos, y: params.y_pos}, Velocity{x: params.x_vel, y: params.y_vel}, params.acceleration);
     }
 }
 
@@ -147,33 +123,15 @@ impl PartialEq for Cursor {
     }
 }
 
-impl From<(Duration, CursorParams)> for Cursor {
-    fn from((time, params): (Duration, CursorParams)) -> Self {
-        Self {
-            session_id: params.session_id,
-            position: Position{x: params.x_pos, y: params.y_pos},
-            velocity: Velocity{x: params.x_vel, y: params.y_vel},
-            acceleration: params.acceleration,
-            time
-        }
-    }
-}
-
-impl From<CursorParams> for Cursor {
-    fn from(params: CursorParams) -> Self {
-        (Duration::default(), params).into()
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use std::{time::Duration, f32::consts::SQRT_2};
+    use std::{f32::consts::SQRT_2, time::Duration};
 
     use crate::cursor::{Cursor, Position};
 
     #[test]
     fn cursor_update() {
-        let mut cursor = Cursor::new(Duration::default(), 0, Position { x: 0., y: 0. });
+        let mut cursor = Cursor::new(0, Position { x: 0., y: 0. });
 
         cursor.update(Duration::from_secs(1), Position { x: 1., y: 1. });
 

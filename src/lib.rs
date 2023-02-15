@@ -1,9 +1,14 @@
-pub mod cursor;
-pub mod server;
-pub mod client;
-mod listener;
 mod object;
 mod blob;
 mod errors;
-mod osc_encode_decode;
+pub mod server;
+pub mod client;
+pub mod cursor;
+pub mod osc_encode_decode;
 pub mod osc_receiver;
+
+pub use server::Server;
+pub use client::Client;
+pub use cursor::Cursor;
+pub use object::Object;
+pub use blob::Blob;
