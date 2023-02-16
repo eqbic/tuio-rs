@@ -199,46 +199,6 @@ impl EncodeOsc<OscBundle> for OscEncoder {
     }
 }
 
-/// A struct containg all parameters of a TUIO Object
-pub struct ObjectParams {
-    pub session_id: i32,
-    pub class_id: i32,
-    pub x_pos: f32,
-    pub y_pos: f32,
-    pub angle: f32,
-    pub x_vel: f32,
-    pub y_vel: f32,
-    pub rotation_speed: f32,
-    pub acceleration: f32,
-    pub rotation_acceleration: f32
-}
-
-/// A struct containg all parameters of a TUIO Cursor
-pub struct CursorParams {
-    pub session_id: i32,
-    pub x_pos: f32,
-    pub y_pos: f32,
-    pub x_vel: f32,
-    pub y_vel: f32,
-    pub acceleration: f32
-}
-
-/// A struct containg all parameters of a TUIO Blob
-pub struct BlobParams {
-    pub session_id: i32,
-    pub x_pos: f32,
-    pub y_pos: f32,
-    pub angle: f32,
-    pub width: f32,
-    pub height: f32,
-    pub area: f32,
-    pub x_vel: f32,
-    pub y_vel: f32,
-    pub rotation_speed: f32,
-    pub acceleration: f32,
-    pub rotation_acceleration: f32
-}
-
 /// An enum of a "set" TUIO message
 pub enum Set {
     Cursor(Vec<Cursor>),
